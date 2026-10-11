@@ -20,7 +20,8 @@ class SyncRepositoryImpl implements SyncRepository {
   final SupabaseSyncDataSource supabaseSyncDataSource;
   final TransactionsDataSource dataSource;
 
-  static const _entityTypes = ['transaction', 'category'];
+  // Categories first: transactions.category_id has an FK to categories.
+  static const _entityTypes = ['category', 'transaction'];
 
   String _watermarkKey(String entityType) => 'lastPulledAt:$entityType';
 

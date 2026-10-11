@@ -461,6 +461,12 @@ manual "Sync now").
   how push already treats each queue row's success/failure independently
   (see above) — one table's pull failing doesn't block or roll back the
   other's watermark.
+- **Categories are pulled before transactions.** `transactions.category_id`
+  is a foreign key to `categories`, and SQLite enforces it. Pulling
+  transactions first made a fresh device reject any transaction whose
+  category hadn't been pulled yet, skipping that table's pull until the
+  next sync. A regression test (`test/sync/sync_repository_pull_test.dart`)
+  covers it against a real in-memory database.
 - **The watermark is captured before querying, not after applying.** A
   row that changes remotely while a pull is in flight is simply picked up
   again on the next pull instead of being missed — the alternative
