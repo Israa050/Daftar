@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 import 'package:stockflow/core/result.dart';
+import 'package:stockflow/core/timestamps.dart';
 import 'package:stockflow/core/sync/domain/entities/operation_type.dart';
 import 'package:stockflow/core/sync/domain/repositories/sync_queue_repository.dart';
 import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
@@ -72,7 +73,7 @@ class CategoryRepositoryImpl extends CategoryRepository {
     }
 
     final id = const Uuid().v4();
-    final now = DateTime.now().toUtc();
+    final now = nowForSync();
     final entry = CategoriesCompanion.insert(
       id: id,
       name: trimmedName,
@@ -155,7 +156,7 @@ class CategoryRepositoryImpl extends CategoryRepository {
       return const Failure('A category with this name already exists');
     }
 
-    final now = DateTime.now().toUtc();
+    final now = nowForSync();
     final entry = CategoriesCompanion(
       id: Value(id),
       name: Value(trimmedName),

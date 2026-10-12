@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 import 'package:stockflow/core/result.dart';
+import 'package:stockflow/core/timestamps.dart';
 import 'package:stockflow/core/sync/domain/entities/operation_type.dart';
 import 'package:stockflow/core/sync/domain/repositories/sync_queue_repository.dart';
 import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
@@ -57,9 +58,10 @@ class TransactionsRepositoryImpl extends TransactionsRepository {
   }) async {
     final id = const Uuid().v4();
     // Set explicitly (rather than relying on Drift's currentDateAndTime
-    // default) so the same instant is guaranteed to appear in both the
-    // local row and the sync payload below, with no follow-up read needed.
-    final now = DateTime.now().toUtc();
+    // default) so the same instant appears in both the local row and the
+    // sync payload below, with no follow-up read needed. nowForSync()
+    // truncates to whole seconds, which is all Drift stores.
+    final now = nowForSync();
     final entry = TransactionsCompanion.insert(
       id: id,
       amountMinor: amountMinor,
