@@ -7,8 +7,7 @@ import 'package:stockflow/core/connectivity/cubit/connectivity_cubit.dart';
 import 'package:stockflow/core/connectivity/domain/network_status.dart';
 import 'package:stockflow/core/result.dart';
 import 'package:stockflow/core/sync/cubit/pending_sync_cubit.dart';
-import 'package:stockflow/core/sync/domain/usecases/pull_remote_changes_usecase.dart';
-import 'package:stockflow/core/sync/domain/usecases/push_pending_changes_usecase.dart';
+import 'package:stockflow/core/sync/domain/usecases/sync_data_usecase.dart';
 
 part 'sync_state.dart';
 
@@ -26,11 +25,9 @@ class SyncCubit extends Cubit<SyncState> {
   SyncCubit({
     required ConnectivityCubit connectivityCubit,
     required PendingSyncCubit pendingSyncCubit,
-    required PushPendingChangesUseCase pushPendingChangesUseCase,
-    required PullRemoteChangesUseCase pullRemoteChangesUseCase,
+    required SyncDataUseCase syncDataUseCase,
   }) : _connectivityCubit = connectivityCubit,
-       _pushPendingChangesUseCase = pushPendingChangesUseCase,
-       _pullRemoteChangesUseCase = pullRemoteChangesUseCase,
+       _syncDataUseCase = syncDataUseCase,
        _lastPendingCount = pendingSyncCubit.state,
        _pendingSyncCubit = pendingSyncCubit,
        super(SyncIdle()) {
@@ -46,8 +43,7 @@ class SyncCubit extends Cubit<SyncState> {
   }
 
   final ConnectivityCubit _connectivityCubit;
-  final PushPendingChangesUseCase _pushPendingChangesUseCase;
-  final PullRemoteChangesUseCase _pullRemoteChangesUseCase;
+  final SyncDataUseCase _syncDataUseCase;
   late final StreamSubscription<NetworkStatus> _connectivitySubscription;
   late final StreamSubscription<int> _pendingCountSubscription;
   int _lastPendingCount;
@@ -78,31 +74,22 @@ class SyncCubit extends Cubit<SyncState> {
     emit(SyncInProgress(isManual: isManual));
 
     try {
-      final pushResult = await _pushPendingChangesUseCase();
-      final pushedCount = switch (pushResult) {
+      final summary = switch (await _syncDataUseCase()) {
         Success(:final data) => data,
         Failure(:final message) => throw Exception(message),
       };
-      _logger.i('Sync push: $pushedCount change(s) pushed.');
-
-      // Pull always runs after push, even when nothing was pending to push:
-      // it is the only way this device learns about changes made on other
-      // devices signed into the same account. The watermark keeps an
-      // empty pull cheap (one small query per entity type).
-      final pullResult = await _pullRemoteChangesUseCase();
-      final pulledCount = switch (pullResult) {
-        Success(:final data) => data,
-        Failure(:final message) => throw Exception(message),
-      };
-      _logger.i('Sync pull: $pulledCount change(s) applied.');
+      _logger.i(
+        'Sync: ${summary.pushedCount} change(s) pushed, '
+        '${summary.pulledCount} applied.',
+      );
 
       // pushPending() returns only a count (D5). Infer "all failed": queue
       // was non-empty and nothing left it.
-      final allFailed = pendingBefore > 0 && pushedCount == 0;
+      final allFailed = pendingBefore > 0 && summary.pushedCount == 0;
       emit(
         SyncCompleted(
-          pushedCount: pushedCount,
-          pulledCount: pulledCount,
+          pushedCount: summary.pushedCount,
+          pulledCount: summary.pulledCount,
           allFailed: allFailed,
           isManual: isManual,
         ),
