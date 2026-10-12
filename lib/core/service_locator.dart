@@ -13,6 +13,7 @@ import 'package:stockflow/core/sync/domain/repositories/sync_queue_repository.da
 import 'package:stockflow/core/sync/domain/repositories/sync_repository.dart';
 import 'package:stockflow/core/sync/domain/usecases/pull_remote_changes_usecase.dart';
 import 'package:stockflow/core/sync/domain/usecases/push_pending_changes_usecase.dart';
+import 'package:stockflow/core/sync/domain/usecases/sync_data_usecase.dart';
 import 'package:stockflow/core/sync/domain/usecases/watch_pending_sync_count_usecase.dart';
 import 'package:stockflow/features/backup/cubit/export_cubit.dart';
 import 'package:stockflow/features/backup/data/backup_repository_impl.dart';
@@ -93,6 +94,13 @@ void setupServiceLocator() {
     () => PullRemoteChangesUseCase(getIt<SyncRepository>()),
   );
 
+  getIt.registerLazySingleton<SyncDataUseCase>(
+    () => SyncDataUseCase(
+      pushPendingChangesUseCase: getIt<PushPendingChangesUseCase>(),
+      pullRemoteChangesUseCase: getIt<PullRemoteChangesUseCase>(),
+    ),
+  );
+
   // App-wide singleton: one queue-count subscription for the whole app.
   getIt.registerLazySingleton<PendingSyncCubit>(
     () => PendingSyncCubit(
@@ -107,8 +115,7 @@ void setupServiceLocator() {
     () => SyncCubit(
       connectivityCubit: getIt<ConnectivityCubit>(),
       pendingSyncCubit: getIt<PendingSyncCubit>(),
-      pushPendingChangesUseCase: getIt<PushPendingChangesUseCase>(),
-      pullRemoteChangesUseCase: getIt<PullRemoteChangesUseCase>(),
+      syncDataUseCase: getIt<SyncDataUseCase>(),
     ),
   );
 

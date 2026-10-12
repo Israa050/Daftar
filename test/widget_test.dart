@@ -8,8 +8,8 @@ import 'package:stockflow/core/service_locator.dart';
 import 'package:stockflow/core/result.dart';
 import 'package:stockflow/core/sync/cubit/pending_sync_cubit.dart';
 import 'package:stockflow/core/sync/cubit/sync_cubit.dart';
-import 'package:stockflow/core/sync/domain/usecases/pull_remote_changes_usecase.dart';
-import 'package:stockflow/core/sync/domain/usecases/push_pending_changes_usecase.dart';
+import 'package:stockflow/core/sync/domain/entities/sync_summary.dart';
+import 'package:stockflow/core/sync/domain/usecases/sync_data_usecase.dart';
 import 'package:stockflow/core/sync/domain/usecases/watch_pending_sync_count_usecase.dart';
 import 'package:stockflow/core/sync/data/repos/sync_queue_repository_impl.dart';
 import 'package:stockflow/core/sync/domain/repositories/sync_queue_repository.dart';
@@ -52,19 +52,13 @@ class _StubWatchPendingSyncCountUseCase
   Stream<int> call() => const Stream.empty();
 }
 
-/// Stub use case that never actually pushes anything -- SyncCubit only
-/// calls this if connectivity is online, which _StubWatchConnectivityUseCase
-/// never reports, but it needs a real implementation to construct.
-class _StubPushPendingChangesUseCase implements PushPendingChangesUseCase {
+/// Stub use case that never actually syncs anything -- SyncCubit only calls
+/// this if connectivity is online, which _StubWatchConnectivityUseCase never
+/// reports, but it needs a real implementation to construct.
+class _StubSyncDataUseCase implements SyncDataUseCase {
   @override
-  Future<Result<int>> call() async => const Success(0);
-}
-
-/// Stub use case that never actually pulls anything -- same reasoning as
-/// _StubPushPendingChangesUseCase.
-class _StubPullRemoteChangesUseCase implements PullRemoteChangesUseCase {
-  @override
-  Future<Result<int>> call() async => const Success(0);
+  Future<Result<SyncSummary>> call() async =>
+      const Success(SyncSummary(pushedCount: 0, pulledCount: 0));
 }
 
 void main() {
@@ -89,8 +83,7 @@ void main() {
       SyncCubit(
         connectivityCubit: getIt<ConnectivityCubit>(),
         pendingSyncCubit: getIt<PendingSyncCubit>(),
-        pushPendingChangesUseCase: _StubPushPendingChangesUseCase(),
-        pullRemoteChangesUseCase: _StubPullRemoteChangesUseCase(),
+        syncDataUseCase: _StubSyncDataUseCase(),
       ),
     );
     getIt.registerSingleton<SyncQueueRepository>(
