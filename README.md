@@ -498,6 +498,18 @@ applies them locally. It runs right after every push, on the same triggers
   Applying a pulled row compares its `updated_at` against the local row's
   `updatedAt`: the incoming row only overwrites when it's strictly newer;
   a tie or an older incoming row leaves the local copy untouched.
+- **`updatedAt` is stamped at whole-second precision.** Drift stores
+  `DateTime` as whole seconds, so a local row written with `DateTime.now()`
+  silently loses its milliseconds while the sync payload built from the same
+  value keeps them. Supabase then held a slightly newer `updated_at` than the
+  device's own row, and the next pull treated the device's own push as a
+  remote change (visible as "1 pushed, 1 applied"). All three write paths
+  (`addTransaction`, `addCategory`, `updateCategory`) now take their
+  timestamp from `nowForSync()` (`lib/core/timestamps.dart`), which truncates
+  to the second before both the local write and the payload are built, so
+  the two always match. Trade-off: last-write-wins resolves at one-second
+  granularity, so two edits in the same second tie, and a tie keeps the
+  local copy.
 - **Existing rows, migrated from schema v4/v5, default to "now," not to
   `occurredTime`.** Backfilling `updatedAt` from a domain field like
   `occurredTime` would falsely mark old, unrelated rows as "just edited,"
