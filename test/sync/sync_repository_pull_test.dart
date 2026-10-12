@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -6,6 +7,7 @@ import 'package:stockflow/core/sync/data/datasources/supabase_sync_data_source.d
 import 'package:stockflow/core/sync/data/repos/sync_repository_impl.dart';
 
 import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
+import 'package:stockflow/features/transactions/domain/entities/transaction_type.dart';
 
 import '../helpers/mocks.dart';
 
@@ -82,5 +84,64 @@ void main() {
     final txn = await transactionsDataSource.findTransactionById('txn-1');
     expect(txn, isNotNull);
     expect(txn!.categoryId, 'cat-remote');
+  });
+
+  // A local transaction already exists at [sameInstant]; the remote has a
+  // different version of the same row at [remoteUpdatedAt].
+  final sameInstant = DateTime.utc(2026, 1, 1, 12);
+
+  Future<Result<int>> pullRemoteVersionAt(DateTime remoteUpdatedAt) async {
+    await transactionsDataSource.upsertTransaction(
+      TransactionsCompanion.insert(
+        id: 'txn-1',
+        amountMinor: 500,
+        type: TransactionType.expense,
+        note: const Value('local edit'),
+        updatedAt: Value(sameInstant),
+      ),
+    );
+
+    when(
+      () => supabaseSyncDataSource.pullChanges(
+        entityType: 'category',
+        since: any(named: 'since'),
+      ),
+    ).thenAnswer((_) async => []);
+    when(
+      () => supabaseSyncDataSource.pullChanges(
+        entityType: 'transaction',
+        since: any(named: 'since'),
+      ),
+    ).thenAnswer(
+      (_) async => [
+        {
+          ...transactionRow,
+          'note': 'remote version',
+          'category_id': null,
+          'updated_at': remoteUpdatedAt.toIso8601String(),
+        },
+      ],
+    );
+
+    return syncRepositoryImpl.pullRemoteChanges();
+  }
+
+  test('remote row with the same updated_at as the local row is not applied '
+      '(tie keeps local)', () async {
+    final result = await pullRemoteVersionAt(sameInstant);
+
+    expect((result as Success<int>).data, 0);
+    final txn = await transactionsDataSource.findTransactionById('txn-1');
+    expect(txn!.note, 'local edit');
+  });
+
+  test('remote row that is newer than the local row is applied', () async {
+    final result = await pullRemoteVersionAt(
+      sameInstant.add(const Duration(milliseconds: 500)),
+    );
+
+    expect((result as Success<int>).data, 1);
+    final txn = await transactionsDataSource.findTransactionById('txn-1');
+    expect(txn!.note, 'remote version');
   });
 }
