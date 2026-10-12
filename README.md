@@ -136,16 +136,23 @@ Two complementary approaches are used:
 - **Mocktail-backed bloc/cubit/use-case tests** (`transactions_bloc_mocktail_test.dart`,
   `categories_bloc_mocktail_test.dart`, `balance_cubit_mocktail_test.dart`,
   `connectivity/`, `sync/watch_pending_sync_count_usecase_test.dart`,
-  `sync/sync_repository_impl_test.dart`)
+  `sync/sync_repository_impl_test.dart`, `sync/sync_data_usecase_test.dart`,
+  `sync/sync_cubit_test.dart`)
   use [`bloc_test`](https://pub.dev/packages/bloc_test) and
   [`mocktail`](https://pub.dev/packages/mocktail) with mocked use cases
   ([`test/helpers/mocks.dart`](test/helpers/mocks.dart)) to assert state
   emissions in isolation, including failure paths a real repository can't be
   forced into (see below). `sync/sync_repository_impl_test.dart` covers
   `pushPending()`'s independent-row processing: one failing entry doesn't
-  block the rest of that pass. `pullRemoteChanges()` has no dedicated
-  tests yet — a known gap, not an oversight (see
-  [Not yet done](docs/implemented.md#-not-yet-done)).
+  block the rest of that pass. `sync/sync_data_usecase_test.dart` covers the
+  push-then-pull sequencing (a push failure skips pull, a pull failure is
+  returned, pull still runs when nothing was pushed), and
+  `sync/sync_cubit_test.dart` covers `SyncCubit`'s states, the in-flight
+  guard, and the `allFailed` inference against a mocked `SyncDataUseCase`.
+  `sync/sync_repository_pull_test.dart` (real in-memory Drift) covers one
+  `pullRemoteChanges()` regression, pull order against the foreign key;
+  last-write-wins and conflict tests are still a known gap, not an
+  oversight (see [Not yet done](docs/implemented.md#-not-yet-done)).
 - **`sync/supabase_sync_data_source_test.dart`** tests the local→remote
   payload mapping (`camelCase` → `snake_case`, `user_id` stamping) directly,
   rather than mocking `pushEntry()`'s Supabase SDK calls end-to-end — the
@@ -451,10 +458,21 @@ it on success. `SyncCubit` decides *when* this runs; `SyncNowButton`/
 
 The other half of two-way sync: `SyncRepositoryImpl.pullRemoteChanges()`
 fetches rows changed remotely since each entity type's own watermark and
-applies them locally. `SyncCubit` runs it right after every push, on the
-same triggers (connectivity regained, a new local change queued, or
-manual "Sync now").
+applies them locally. It runs right after every push, on the same triggers
+(connectivity regained, a new local change queued, or manual "Sync now").
 
+- **One use case runs the whole sync: `SyncDataUseCase`.** Push and pull
+  used to be two use cases that `SyncCubit` called one after the other and
+  unwrapped itself. They are now sequenced in the domain layer
+  (`lib/core/sync/domain/usecases/sync_data_usecase.dart`): it runs
+  `PushPendingChangesUseCase`, and returns a `Failure` straight away if the
+  queue can't be read (pull is skipped), then runs
+  `PullRemoteChangesUseCase` and returns a `SyncSummary` (`pushedCount`,
+  `pulledCount`). Pull runs even when nothing was pushed, because it is the
+  only way this device learns about changes made elsewhere.
+  `SyncCubit` now only decides *when* to sync and turns the `Result` into
+  `SyncState`; `allFailed` stays in the cubit because it needs the pending
+  count from before the sync, which is cubit state, not domain.
 - **A `lastPulledAt` watermark per entity type**, not one shared value.
   `SyncMeta` (a small key-value Drift table, keys like
   `lastPulledAt:transaction`) tracks each table's own progress, mirroring
