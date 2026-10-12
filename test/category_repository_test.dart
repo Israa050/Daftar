@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stockflow/core/result.dart';
+import 'package:stockflow/core/sync/domain/entities/operation_type.dart';
 import 'package:stockflow/core/sync/data/repos/sync_queue_repository_impl.dart';
 import 'package:stockflow/core/sync/domain/repositories/sync_queue_repository.dart';
 import 'package:stockflow/features/categories/data/repos/category_repository_impl.dart';
@@ -104,9 +107,56 @@ void main() {
         expect(groceries.id, isNot(utilities.id));
       },
     );
+
+    test('local updatedAt and the queued payload updatedAt are the same '
+        'instant.', () async {
+      await repository.addCategory(name: 'Groceries');
+
+      final row = (await dataSource.getAllCategoriesOnce()).singleWhere(
+        (c) => c.name == 'Groceries',
+      );
+      final queued = (await dataSource.getAllSyncQueueEntries()).singleWhere(
+        (e) => e.entityId == row.id,
+      );
+      final payloadUpdatedAt =
+          jsonDecode(queued.payload)['updatedAt'] as String;
+
+      expect(
+        DateTime.parse(payloadUpdatedAt),
+        row.updatedAt.toUtc(),
+        reason:
+            'Drift stores whole seconds; the payload must carry the same '
+            'value or a pull sees its own push as newer.',
+      );
+    });
   });
 
   group('updateCategory', () {
+    test('local updatedAt and the queued update payload updatedAt are the '
+        'same instant.', () async {
+      await repository.addCategory(name: 'Groceries');
+      final id = (await repository.getCategoryByName('Groceries'))!.id;
+
+      await repository.updateCategory(id: id, name: 'Snacks');
+
+      final row = (await dataSource.getAllCategoriesOnce()).singleWhere(
+        (c) => c.id == id,
+      );
+      final queued = (await dataSource.getAllSyncQueueEntries()).singleWhere(
+        (e) => e.entityId == id && e.operation == OperationType.update,
+      );
+      final payloadUpdatedAt =
+          jsonDecode(queued.payload)['updatedAt'] as String;
+
+      expect(
+        DateTime.parse(payloadUpdatedAt),
+        row.updatedAt.toUtc(),
+        reason:
+            'Drift stores whole seconds; the payload must carry the same '
+            'value or a pull sees its own push as newer.',
+      );
+    });
+
     test('valid update -> Success, name and colorHex change.', () async {
       await repository.addCategory(name: 'Groceries', colorHex: '#111111');
       final id = (await repository.getCategoryByName('Groceries'))!.id;

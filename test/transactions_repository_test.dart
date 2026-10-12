@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stockflow/core/result.dart';
@@ -97,6 +99,26 @@ void main() {
         expect(rows.single.amountMinor, 20);
       },
     );
+
+    test('local updatedAt and the queued payload updatedAt are the same '
+        'instant.', () async {
+      await repository.addTransaction(
+        amountMinor: 5,
+        type: TransactionType.expense,
+      );
+      final row = (await dataSource.getAllTransactionsOnce()).single;
+      final queued = (await dataSource.getAllSyncQueueEntries()).single;
+      final payloadUpdatedAt =
+          jsonDecode(queued.payload)['updatedAt'] as String;
+
+      expect(
+        DateTime.parse(payloadUpdatedAt),
+        row.updatedAt.toUtc(),
+        reason:
+            'Drift stores whole seconds; the payload must carry the same '
+            'value or a pull sees its own push as newer.',
+      );
+    });
   });
 
   group('getAllTransactions', () {
