@@ -149,10 +149,15 @@ Two complementary approaches are used:
   returned, pull still runs when nothing was pushed), and
   `sync/sync_cubit_test.dart` covers `SyncCubit`'s states, the in-flight
   guard, and the `allFailed` inference against a mocked `SyncDataUseCase`.
-  `sync/sync_repository_pull_test.dart` (real in-memory Drift) covers one
-  `pullRemoteChanges()` regression, pull order against the foreign key;
-  last-write-wins and conflict tests are still a known gap, not an
-  oversight (see [Not yet done](docs/implemented.md#-not-yet-done)).
+  `sync/sync_repository_pull_test.dart` (real in-memory Drift) covers
+  `pullRemoteChanges()`: last-write-wins for transactions and categories
+  (newer remote applied, tie and older remote keep local), the applied row
+  carrying the remote `updatedAt`, a repeat pull applying nothing, pull
+  never enqueueing, pull order against the foreign key, and the per-type
+  watermark (saved, reused as `since`, not advanced when that type's pull
+  fails). `sync/pull_conflict_test.dart` runs a real conflict through the
+  real `CategoryRepositoryImpl` (an offline edit, queued) against a mocked
+  remote edit and checks which version the pull leaves in the local DB.
 - **`sync/supabase_sync_data_source_test.dart`** tests the local→remote
   payload mapping (`camelCase` → `snake_case`, `user_id` stamping) directly,
   rather than mocking `pushEntry()`'s Supabase SDK calls end-to-end — the
@@ -522,6 +527,24 @@ applies them locally. It runs right after every push, on the same triggers
   remove that row on another. Fixing this needs a soft-delete
   (`deleted_at`) column on both tables plus a read-path filter everywhere;
   tracked as follow-up work, not yet implemented.
+- **How a conflict is proven, and what that does not cover.** Edit a
+  category on this device while offline (it is queued) and edit the same
+  row on another device: `test/sync/pull_conflict_test.dart` shows the pull
+  keeps whichever edit has the later `updated_at` in the local database, a
+  tie keeps the local copy, and the pending local edit stays queued
+  either way. The scenario uses categories because transactions cannot be
+  edited in the app yet (only added or deleted), so transaction
+  last-write-wins is covered at the pull level only.
+- **Known gap: push does not respect last-write-wins.** `pushEntry` does an
+  unconditional `.upsert()` with no timestamp check, and a sync pushes
+  before it pulls. So a stale queued local edit can overwrite a *newer*
+  remote edit on the server before the pull ever sees it, and the later
+  edit is lost even though its `updated_at` is greater. Last-write-wins is
+  currently enforced by the pull only. Fixing it needs a conditional upsert
+  (only write when the server's `updated_at` is older) or a
+  pull-before-push order that also drops the stale queue entry; tracked as
+  follow-up work (`fix/push-respects-last-write-wins`), with a skipped test
+  in `pull_conflict_test.dart` as the pointer.
 
 ### Export data (manual backup)
 
