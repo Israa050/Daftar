@@ -384,6 +384,102 @@ why "always enqueue" was chosen and what is deliberately deferred.
   "rows that failed" — a row leaves the count only once its push actually
   succeeds.
 
+### Sync flow, end to end
+
+How a change made offline reaches the server and how a change made
+elsewhere reaches this device. The overview first, then one sync in order.
+
+**→ [Open the interactive sync-loop walkthrough](https://claude.ai/artifact/6tvk7V6VFoJJeEsEo9MpAU)**
+to step through one sync yourself, including the conflict cases (the other
+device edited the same row later, earlier, or in the same second) and the
+known push gap.
+
+```mermaid
+flowchart TD
+    W["Write while offline\n(addTransaction, addCategory, updateCategory)"]
+
+    subgraph TX["One Drift transaction (the outbox)"]
+        DB[("Local SQLite\nrow stamped with updatedAt\n(whole seconds, nowForSync)")]
+        Q[("sync_queue_entries\nJSON snapshot of the change")]
+    end
+
+    W --> DB
+    W --> Q
+
+    T["Triggers\napp launch, connectivity regained,\nnew change queued, manual Sync now"]
+    S["SyncDataUseCase\none sync at a time"]
+    T --> S
+
+    S --> PUSH["1. Push\neach queued row, independently"]
+    Q -- "read" --> PUSH
+    PUSH -- "upsert or delete\n(no timestamp check: known gap)" --> R[("Supabase Postgres\nRLS: auth.uid() = user_id")]
+    PUSH -- "success: dequeue\nfailure: stays queued" --> Q
+
+    S --> PULL["2. Pull, per table\ncategories first, then transactions"]
+    R -- "rows where user_id = me and\nupdated_at > lastPulledAt" --> PULL
+    PULL --> C{"remote updatedAt\nstrictly newer than\nthe local row?"}
+    C -- "yes, or no local row" --> A["Apply with a direct Drift upsert\n(bypasses the queue: no push/pull loop)"]
+    A --> DB
+    C -- "tie or older" --> K["Keep the local row\n(last write wins)"]
+    PULL --> WM["Save lastPulledAt for that table\n(only if its pull succeeded)"]
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Cubit as SyncCubit
+    participant UC as SyncDataUseCase
+    participant Repo as SyncRepositoryImpl
+    participant Local as Local DB and queue
+    participant Remote as Supabase
+
+    Cubit->>UC: call() on launch, reconnect, new queued change, or Sync now
+    Note over Cubit: ignored while another sync is running
+    UC->>Repo: pushPending()
+    Repo->>Local: read queued entries
+    loop each queued entry
+        Repo->>Remote: upsert or delete
+        alt succeeded
+            Repo->>Local: dequeue
+        else failed
+            Note over Repo,Local: stays queued, retried next sync
+        end
+    end
+    Repo-->>UC: Success(pushedCount), or Failure if the queue is unreadable
+    Note over UC: a push Failure stops here, pull is skipped
+    UC->>Repo: pullRemoteChanges()
+    loop categories, then transactions
+        Repo->>Local: read lastPulledAt (default 1970)
+        Repo->>Remote: select where user_id = me and updated_at > lastPulledAt
+        Remote-->>Repo: changed rows
+        loop each row
+            alt no local row, or remote updatedAt strictly newer
+                Repo->>Local: direct upsert, no queue entry
+            else tie or older
+                Note over Repo,Local: keep the local row
+            end
+        end
+        Repo->>Local: save lastPulledAt as the pull's start time
+    end
+    Note over Repo: a table whose pull throws keeps its old lastPulledAt
+    Repo-->>UC: Success(appliedCount)
+    UC-->>Cubit: SyncSummary(pushedCount, pulledCount)
+```
+
+Reading it:
+
+- **The outbox is atomic.** The local row and its queue entry commit in one
+  Drift transaction, so a change is never saved without being queued.
+- **Push first, then pull, every sync**, even when nothing was queued: pull
+  is the only way this device learns about changes made elsewhere.
+- **Pull writes bypass the queue.** Re-enqueueing a pulled row would push it
+  back, change its `updated_at`, and be pulled again forever.
+- **Last-write-wins is enforced by the pull only.** The push is an
+  unconditional upsert, so a stale queued edit can overwrite a newer remote
+  edit before the pull ever sees it (see
+  [Known gap: push does not respect last-write-wins](#pull-sync-downloading-changes-from-other-devices)).
+  Remote deletes are not propagated either.
+
 ### Push sync to Supabase
 
 The drain side of the outbox: `SyncRepositoryImpl.pushPending()` reads
