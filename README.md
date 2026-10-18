@@ -75,7 +75,7 @@ delete with a countdown undo.
 - 👉 **Swipe to delete** — swipe a row away, then **Undo** within a 5-second countdown before it's permanently deleted
 - 📡 **Offline banner** — a strip above the transaction list appears while the device has no network interface; the copy is informational ("changes are saved on this device"), since every write is persisted and queued locally regardless of connectivity
 - 🔼 **Pending-changes badge** — an always-visible app-bar action showing how many local writes are waiting to sync (the count badge itself only appears once something is queued); tapping it opens the sync sheet
-- ☁️ **Push sync to Supabase** — queued local writes are pushed to a Supabase backend (anonymous auth, RLS scoped to `auth.uid()`) whenever connectivity comes back online or a new change is queued while already online; each row pushes independently and failed rows simply stay queued for the next retry — no status/retry-count bookkeeping needed, since upsert/delete are idempotent
+- ☁️ **Push sync to Supabase** — queued local writes are pushed to a Supabase backend (anonymous auth, RLS scoped to `auth.uid()`) whenever connectivity comes back online or a new change is queued while already online; each row pushes independently and failed rows simply stay queued for the next retry — no status/retry-count bookkeeping needed, since the push functions and delete are idempotent
 - 🔁 **Manual "Sync now"** — the sync sheet (opened from the pending-changes badge) shows the queued-change count and a button to trigger a push-then-pull on demand, disabled with a reason (syncing / offline / nothing queued) instead of just doing nothing; a result snackbar ("Synced N changes out, M in" / "Couldn't send your changes" / "Already up to date") appears only for this manual path, never for the silent auto-trigger
 - 🔃 **Pull sync from other devices** — after every push, the app also pulls changes made elsewhere on the same account and applies them locally with last-write-wins (by `updated_at`), so edits on one device eventually show up on another; each table tracks its own sync watermark independently (remote deletes are a known, documented gap — not yet propagated)
 - 🔄 **Fully reactive** — every screen is driven by a live Drift stream; add/delete never trigger a manual reload
@@ -157,12 +157,17 @@ Two complementary approaches are used:
   watermark (saved, reused as `since`, not advanced when that type's pull
   fails). `sync/pull_conflict_test.dart` runs a real conflict through the
   real `CategoryRepositoryImpl` (an offline edit, queued) against a mocked
-  remote edit and checks which version the pull leaves in the local DB.
+  remote edit and checks which version the pull leaves in the local DB. A
+  whole-sync test there also runs the real push-then-pull against a fake
+  server that follows the push functions' rule (write only if not newer) and
+  checks that both sides end on the later edit.
 - **`sync/supabase_sync_data_source_test.dart`** tests the local→remote
-  payload mapping (`camelCase` → `snake_case`, `user_id` stamping) directly,
-  rather than mocking `pushEntry()`'s Supabase SDK calls end-to-end — the
-  SDK's `client.from(...).upsert(...)` chain gets its awaitability from an
-  overridden generic `then` method that `mocktail` can't reliably intercept.
+  payload mapping (`camelCase` → `snake_case`, `user_id` stamping) and the
+  choice of Postgres function and `p_`-prefixed arguments (`rpcCallFor`)
+  directly, rather than mocking `pushEntry()`'s Supabase SDK calls
+  end-to-end — the SDK's `client.rpc(...)` / `client.from(...)` chains get
+  their awaitability from an overridden generic `then` method that
+  `mocktail` can't reliably intercept.
 - **Pure-function tests** (`format_test.dart`,
   `backup/export_serializer_test.dart`) need neither a database nor mocks.
 
@@ -389,11 +394,6 @@ why "always enqueue" was chosen and what is deliberately deferred.
 How a change made offline reaches the server and how a change made
 elsewhere reaches this device. The overview first, then one sync in order.
 
-**→ [Open the interactive sync-loop walkthrough](https://claude.ai/artifact/6tvk7V6VFoJJeEsEo9MpAU)**
-to step through one sync yourself, including the conflict cases (the other
-device edited the same row later, earlier, or in the same second) and the
-known push gap.
-
 ```mermaid
 flowchart TD
     W["Write while offline\n(addTransaction, addCategory, updateCategory)"]
@@ -412,7 +412,7 @@ flowchart TD
 
     S --> PUSH["1. Push\neach queued row, independently"]
     Q -- "read" --> PUSH
-    PUSH -- "upsert or delete\n(no timestamp check: known gap)" --> R[("Supabase Postgres\nRLS: auth.uid() = user_id")]
+    PUSH -- "push_category / push_transaction:\nwrite only if the server row is not newer\n(delete is unconditional)" --> R[("Supabase Postgres\nRLS: auth.uid() = user_id")]
     PUSH -- "success: dequeue\nfailure: stays queued" --> Q
 
     S --> PULL["2. Pull, per table\ncategories first, then transactions"]
@@ -438,7 +438,8 @@ sequenceDiagram
     UC->>Repo: pushPending()
     Repo->>Local: read queued entries
     loop each queued entry
-        Repo->>Remote: upsert or delete
+        Repo->>Remote: push function (writes only if not newer), or delete
+        Note over Repo,Remote: a stale write is ignored by the server, but still counts as pushed
         alt succeeded
             Repo->>Local: dequeue
         else failed
@@ -474,11 +475,14 @@ Reading it:
   is the only way this device learns about changes made elsewhere.
 - **Pull writes bypass the queue.** Re-enqueueing a pulled row would push it
   back, change its `updated_at`, and be pulled again forever.
-- **Last-write-wins is enforced by the pull only.** The push is an
-  unconditional upsert, so a stale queued edit can overwrite a newer remote
-  edit before the pull ever sees it (see
-  [Known gap: push does not respect last-write-wins](#pull-sync-downloading-changes-from-other-devices)).
-  Remote deletes are not propagated either.
+- **Last-write-wins holds on both halves.** The pull applies a remote row
+  only if it is strictly newer. The push calls a Postgres function that
+  writes only if the server row is not newer, so a stale queued edit cannot
+  overwrite a newer edit from another device. The server ignores the stale
+  write, the entry still counts as pushed and is dequeued, and the pull right
+  after brings the newer row down (see
+  [Push respects last-write-wins](#pull-sync-downloading-changes-from-other-devices)).
+  Remote deletes are not propagated.
 
 ### Push sync to Supabase
 
@@ -499,9 +503,11 @@ it on success. `SyncCubit` decides *when* this runs; `SyncNowButton`/
   (network, RLS, a bad id) is logged and left queued for the next attempt;
   the loop continues to the next row rather than aborting the whole pass.
   This is safe specifically because `pushEntry`'s Supabase calls are
-  idempotent — `.upsert()` for create/update, and `.delete().eq('id', ...)`
-  for delete, which is already a no-op success (not an error) when the row
-  is already gone.
+  idempotent — the `push_category` / `push_transaction` functions for
+  create/update (an insert-or-update that a retry repeats harmlessly, since
+  an equal `updated_at` is accepted), and `.delete().eq('id', ...)` for
+  delete, which is already a no-op success (not an error) when the row is
+  already gone.
 - **No `status`/retry-count/error column, by choice.** A row's mere
   presence in `SyncQueueEntries` *is* "not yet confirmed on the server" —
   adding bookkeeping columns for retry counts or backoff was rejected as
@@ -552,8 +558,10 @@ it on success. `SyncCubit` decides *when* this runs; `SyncNowButton`/
   possible.
 - **Not yet built:** no mocked-Supabase test exists for `pushEntry()`
   itself (`SupabaseSyncDataSource.mapForSupabase()` is tested directly
-  instead — see [Running tests](#running-tests) — since mocktail can't
-  reliably intercept the Supabase SDK's `.upsert()` awaitable chain).
+  instead, together with `rpcCallFor()`, the pure function that picks the
+  Postgres function and its arguments — see [Running tests](#running-tests) —
+  since mocktail can't reliably intercept the Supabase SDK's `.rpc()` /
+  `.from(...)` awaitable chains).
 
 ### Pull sync (downloading changes from other devices)
 
@@ -628,19 +636,28 @@ applies them locally. It runs right after every push, on the same triggers
   row on another device: `test/sync/pull_conflict_test.dart` shows the pull
   keeps whichever edit has the later `updated_at` in the local database, a
   tie keeps the local copy, and the pending local edit stays queued
-  either way. The scenario uses categories because transactions cannot be
-  edited in the app yet (only added or deleted), so transaction
-  last-write-wins is covered at the pull level only.
-- **Known gap: push does not respect last-write-wins.** `pushEntry` does an
-  unconditional `.upsert()` with no timestamp check, and a sync pushes
-  before it pulls. So a stale queued local edit can overwrite a *newer*
-  remote edit on the server before the pull ever sees it, and the later
-  edit is lost even though its `updated_at` is greater. Last-write-wins is
-  currently enforced by the pull only. Fixing it needs a conditional upsert
-  (only write when the server's `updated_at` is older) or a
-  pull-before-push order that also drops the stale queue entry; tracked as
-  follow-up work (`fix/push-respects-last-write-wins`), with a skipped test
-  in `pull_conflict_test.dart` as the pointer.
+  either way. A whole-sync test (real push then pull against a fake server
+  that follows the push functions' rule) shows a stale queued edit no longer
+  overwrites a newer remote edit, and both sides end on the later one. The
+  scenario uses categories because transactions cannot be edited in the app
+  yet (only added or deleted), so transaction last-write-wins is covered at
+  the pull level only.
+- **Push respects last-write-wins.** `pushEntry` used to do an
+  unconditional `.upsert()`, and a sync pushes before it pulls, so a stale
+  queued edit could overwrite a *newer* remote edit on the server before the
+  pull ever saw it. It now calls a Postgres function per table
+  (`push_category`, `push_transaction`) that inserts or updates only when
+  the stored `updated_at` is not newer than the pushed one. A rejected stale
+  write is a silent no-op, so the entry is still dequeued and the pull that
+  follows applies the newer row locally; both sides converge on the later
+  edit. `<=` is deliberate: a retried push of the same edit has an equal
+  `updated_at` and must still succeed. The rule lives in SQL, so it is
+  proven in the Supabase SQL editor (new row inserted, older ignored, newer
+  and equal applied) and, for the client flow, by a whole-sync test in
+  `pull_conflict_test.dart` against a fake server that follows the same
+  rule. Limits: same-second edits tie and the later push wins; deletes are
+  still unconditional; and an installed app version from before this change
+  still upserts directly, so it keeps the old behavior until updated.
 
 ### Export data (manual backup)
 
@@ -788,6 +805,13 @@ mirrors the local tables above with a few differences:
 - **`..._add_pull_query_indexes.sql`** adds `(user_id, updated_at)` indexes
   to match the pull query (`user_id = … and updated_at > … order by
   updated_at`), and is the first migration actually pushed.
+- **`..._push_if_newer_functions.sql`** adds `push_category` and
+  `push_transaction`: an insert-or-update that runs only when the stored
+  `updated_at` is not newer than the pushed one (`security invoker`, so RLS
+  still applies; `user_id` comes from `auth.uid()`; execute is granted to
+  `authenticated` only). The client calls them with `rpc` instead of
+  `upsert`, so last-write-wins also holds on push. Deploy this migration
+  before an app build that calls the functions.
 - **Changing the backend:** `supabase migration new <name>`, write the SQL,
   `supabase db push --dry-run`, then `supabase db push`. No local Docker
   replay is set up, so check a change by re-running the schema queries
