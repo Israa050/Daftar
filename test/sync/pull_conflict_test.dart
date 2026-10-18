@@ -1,10 +1,18 @@
+import 'dart:convert';
+
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:stockflow/core/result.dart';
+import 'package:stockflow/core/sync/data/datasources/supabase_sync_data_source.dart';
 import 'package:stockflow/core/sync/data/repos/sync_queue_repository_impl.dart';
 import 'package:stockflow/core/sync/data/repos/sync_repository_impl.dart';
 import 'package:stockflow/core/sync/domain/entities/operation_type.dart';
+import 'package:stockflow/core/sync/domain/entities/sync_queue_entry_entity.dart';
+import 'package:stockflow/core/sync/domain/entities/sync_summary.dart';
+import 'package:stockflow/core/sync/domain/usecases/pull_remote_changes_usecase.dart';
+import 'package:stockflow/core/sync/domain/usecases/push_pending_changes_usecase.dart';
+import 'package:stockflow/core/sync/domain/usecases/sync_data_usecase.dart';
 import 'package:stockflow/features/categories/data/repos/category_repository_impl.dart';
 import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
 
@@ -23,6 +31,57 @@ import '../helpers/mocks.dart';
 // Remote times are always built from the local edit's own updatedAt, never
 // from the clock: timestamps are whole seconds, and the local add and edit
 // happen within the same second.
+
+/// In-memory stand-in for the Supabase `categories` table.
+///
+/// pushEntry follows the same rule as the push_category SQL function: write
+/// only if the stored updated_at is not later than the pushed one, and treat a
+/// rejected stale write as a normal return (no error), so the client still
+/// dequeues it. This fake mirrors that SQL; the SQL itself is proven in the
+/// Supabase SQL editor, not here.
+class FakeServer extends Fake implements SupabaseSyncDataSource {
+  /// Rows in the shape the pull reads (snake_case), keyed by id.
+  final Map<String, Map<String, dynamic>> categories = {};
+
+  @override
+  Future<void> pushEntry(SyncQueueEntryEntity entry) async {
+    if (entry.entityType != 'category') return;
+
+    if (entry.operation == OperationType.delete) {
+      categories.remove(entry.entityId);
+      return;
+    }
+
+    final local = jsonDecode(entry.payload) as Map<String, dynamic>;
+    final pushedAt = DateTime.parse(local['updatedAt'] as String);
+    final stored = categories[entry.entityId];
+    if (stored != null &&
+        DateTime.parse(stored['updated_at'] as String).isAfter(pushedAt)) {
+      return;
+    }
+
+    categories[entry.entityId] = {
+      'id': entry.entityId,
+      'name': local['name'],
+      'color_hex': local['colorHex'],
+      'updated_at': local['updatedAt'],
+    };
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> pullChanges({
+    required String entityType,
+    required DateTime since,
+  }) async {
+    if (entityType != 'category') return [];
+
+    return categories.values
+        .where((r) => DateTime.parse(r['updated_at'] as String).isAfter(since))
+        .map((r) => Map<String, dynamic>.from(r))
+        .toList();
+  }
+}
+
 void main() {
   late TransactionsDataSource dataSource;
   late SyncQueueRepositoryImpl syncQueueRepository;
@@ -180,13 +239,42 @@ void main() {
     expect(stored.updatedAt.toUtc(), later());
   });
 
-  test(
-    'KNOWN GAP: a stale queued edit overwrites a newer remote edit on push',
-    () async {
-      // Not testable at the pull level. pushEntry() upserts unconditionally
-      // and SyncDataUseCase pushes first, so the later remote edit is lost on
-      // the server. Left here as a pointer for a follow-up branch.
-    },
-    skip: 'known gap, see fix/push-respects-last-write-wins',
-  );
+  test('whole sync: a stale queued edit does not overwrite a newer remote edit '
+      'on the server, and both sides end on the newer one', () async {
+    // The other device already edited the same category, later than the
+    // offline edit that is still waiting in the queue.
+    final server = FakeServer()
+      ..categories[categoryId] = {
+        'id': categoryId,
+        'name': 'Remote Edit',
+        'color_hex': '#00FF00',
+        'updated_at': later().toIso8601String(),
+      };
+    final repo = SyncRepositoryImpl(
+      syncQueueRepository: syncQueueRepository,
+      supabaseSyncDataSource: server,
+      dataSource: dataSource,
+    );
+    final sync = SyncDataUseCase(
+      pushPendingChangesUseCase: PushPendingChangesUseCase(repo),
+      pullRemoteChangesUseCase: PullRemoteChangesUseCase(repo),
+    );
+
+    final result = await sync();
+
+    expect(result, isA<Success<SyncSummary>>());
+    expect(
+      server.categories[categoryId]!['name'],
+      'Remote Edit',
+      reason: 'push must not replace a newer server row with a stale edit',
+    );
+    final stored = await storedCategory();
+    expect(stored.name, 'Remote Edit');
+    expect(stored.updatedAt.toUtc(), later());
+    expect(
+      await dataSource.getAllSyncQueueEntries(),
+      isEmpty,
+      reason: 'a rejected stale write still counts as pushed and is dequeued',
+    );
+  });
 }
