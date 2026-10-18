@@ -161,4 +161,150 @@ void main() {
       expect(result.containsKey('user_id'), false);
     });
   });
+
+  // rpcCallFor picks the Postgres function and its p_-prefixed arguments for a
+  // create/update. Its input is mapForSupabase's output, so build it the way
+  // the app does (mapForSupabase first, then rpcCallFor). The record it returns
+  // has `.function` and `.params`. Each case is a skipped placeholder until
+  // its body is written.
+  group('rpcCallFor', () {
+    test('category -> push_category with exactly the four p_ arguments', () {
+      final mapped = dataSource.mapForSupabase('category', {
+        'id': 'cat-1',
+        'name': 'Food',
+        'colorHex': '#FF9800',
+        'updatedAt': '2026-01-01T00:00:00.000Z',
+      }, 'user-123');
+
+      final call = dataSource.rpcCallFor('category', mapped);
+
+      expect(call.function, 'push_category');
+      expect(
+        call.params.keys,
+        unorderedEquals(['p_id', 'p_name', 'p_color_hex', 'p_updated_at']),
+      );
+    });
+
+    // Same path the app takes: local payload -> mapForSupabase -> rpcCallFor.
+    Map<String, dynamic> mappedCategory({String? colorHex = '#FF9800'}) =>
+        dataSource.mapForSupabase('category', {
+          'id': 'cat-1',
+          'name': 'Food',
+          'colorHex': colorHex,
+          'updatedAt': '2026-01-01T00:00:05.000Z',
+        }, 'user-123');
+
+    Map<String, dynamic> mappedTransaction({
+      String? note = 'coffee',
+      String? categoryId = 'cat-1',
+    }) => dataSource.mapForSupabase('transaction', {
+      'id': 'txn-1',
+      'amountMinor': 500,
+      'type': 'expense',
+      'note': note,
+      'categoryId': categoryId,
+      'occurredTime': '2026-01-01T00:00:01.000Z',
+      'creationTime': '2026-01-01T00:00:02.000Z',
+      'updatedAt': '2026-01-01T00:00:05.000Z',
+    }, 'user-123');
+
+    test(
+      'transaction -> push_transaction with exactly the eight p_ arguments',
+      () {
+        final call = dataSource.rpcCallFor('transaction', mappedTransaction());
+
+        expect(call.function, 'push_transaction');
+        expect(
+          call.params.keys,
+          unorderedEquals([
+            'p_id',
+            'p_amount_minor',
+            'p_type',
+            'p_note',
+            'p_category_id',
+            'p_occurred_at',
+            'p_created_at',
+            'p_updated_at',
+          ]),
+        );
+      },
+    );
+
+    test(
+      'user_id is never sent (the function takes the owner from auth.uid())',
+      () {
+        // mapForSupabase stamps user_id; rpcCallFor must drop it, because the
+        // functions have no such parameter and PostgREST would answer
+        // "function not found".
+        final category = dataSource.rpcCallFor('category', mappedCategory());
+        final transaction = dataSource.rpcCallFor(
+          'transaction',
+          mappedTransaction(),
+        );
+
+        expect(category.params.containsKey('user_id'), isFalse);
+        expect(transaction.params.containsKey('user_id'), isFalse);
+        expect(category.params.values, isNot(contains('user-123')));
+        expect(transaction.params.values, isNot(contains('user-123')));
+      },
+    );
+
+    test(
+      'values come through from the mapped row, p_updated_at is not null',
+      () {
+        final category = dataSource.rpcCallFor('category', mappedCategory());
+        expect(category.params, {
+          'p_id': 'cat-1',
+          'p_name': 'Food',
+          'p_color_hex': '#FF9800',
+          'p_updated_at': '2026-01-01T00:00:05.000Z',
+        });
+
+        final transaction = dataSource.rpcCallFor(
+          'transaction',
+          mappedTransaction(),
+        );
+        expect(transaction.params, {
+          'p_id': 'txn-1',
+          'p_amount_minor': 500,
+          'p_type': 'expense',
+          'p_note': 'coffee',
+          'p_category_id': 'cat-1',
+          'p_occurred_at': '2026-01-01T00:00:01.000Z',
+          'p_created_at': '2026-01-01T00:00:02.000Z',
+          'p_updated_at': '2026-01-01T00:00:05.000Z',
+        });
+
+        // The earlier bug read the wrong keys and sent a null timestamp, which
+        // violates NOT NULL on the server.
+        expect(category.params['p_updated_at'], isNotNull);
+        expect(transaction.params['p_updated_at'], isNotNull);
+      },
+    );
+
+    test('null optional fields stay null (note, colorHex, categoryId)', () {
+      final category = dataSource.rpcCallFor(
+        'category',
+        mappedCategory(colorHex: null),
+      );
+      expect(category.params.containsKey('p_color_hex'), isTrue);
+      expect(category.params['p_color_hex'], isNull);
+
+      final transaction = dataSource.rpcCallFor(
+        'transaction',
+        mappedTransaction(note: null, categoryId: null),
+      );
+      expect(transaction.params.containsKey('p_note'), isTrue);
+      expect(transaction.params['p_note'], isNull);
+      expect(transaction.params.containsKey('p_category_id'), isTrue);
+      expect(transaction.params['p_category_id'], isNull);
+    });
+
+    test('an unknown entity type throws ArgumentError', () {
+      expect(
+        () => dataSource.rpcCallFor('something-new', {'id': 'x-1'}),
+        throwsArgumentError,
+      );
+    });
+  });
 }

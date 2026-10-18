@@ -26,8 +26,14 @@ class SupabaseSyncDataSource {
       case OperationType.update:
         final local = jsonDecode(entry.payload) as Map<String, dynamic>;
         final userId = client.auth.currentUser!.id;
-        final payload = mapForSupabase(entry.entityType, local, userId);
-        await client.from(tableName).upsert(payload);
+        final mapped = mapForSupabase(entry.entityType, local, userId);
+        // A Postgres function, not an upsert: it writes only if the server
+        // row is not newer, so a stale offline edit cannot overwrite a newer
+        // edit from another device. A rejected stale write returns normally,
+        // so the caller still dequeues it and the next pull brings the newer
+        // row down.
+        final call = rpcCallFor(entry.entityType, mapped);
+        await client.rpc(call.function, params: call.params);
 
       case OperationType.delete:
         // No rows-affected check needed: Postgrest's delete doesn't throw
@@ -103,6 +109,53 @@ class SupabaseSyncDataSource {
         };
       default:
         return local;
+    }
+  }
+
+  /// Which Postgres function to call, and its arguments, for one create or
+  /// update. [mapped] is the output of [mapForSupabase].
+  ///
+  /// Argument names carry the `p_` prefix the functions declare (see
+  /// supabase/migrations/*_push_if_newer_functions.sql), and `user_id` is
+  /// deliberately absent: the functions take the owner from `auth.uid()`.
+  ///
+  /// Throws for an unknown [entityType]; pushPending catches per entry, so
+  /// one bad row stays queued without blocking the rest.
+  ///
+  /// `@visibleForTesting`: the `client.rpc(...)` call itself can't be mocked,
+  /// so this pure mapping is what the tests check.
+  @visibleForTesting
+  ({String function, Map<String, dynamic> params}) rpcCallFor(
+    String entityType,
+    Map<String, dynamic> mapped,
+  ) {
+    switch (entityType) {
+      case 'transaction':
+        return (
+          function: 'push_transaction',
+          params: {
+            'p_id': mapped['id'],
+            'p_amount_minor': mapped['amount_minor'],
+            'p_type': mapped['type'],
+            'p_note': mapped['note'],
+            'p_category_id': mapped['category_id'],
+            'p_occurred_at': mapped['occurred_at'],
+            'p_created_at': mapped['created_at'],
+            'p_updated_at': mapped['updated_at'],
+          },
+        );
+      case 'category':
+        return (
+          function: 'push_category',
+          params: {
+            'p_id': mapped['id'],
+            'p_name': mapped['name'],
+            'p_color_hex': mapped['color_hex'],
+            'p_updated_at': mapped['updated_at'],
+          },
+        );
+      default:
+        throw ArgumentError('No push function for entity type "$entityType"');
     }
   }
 }
