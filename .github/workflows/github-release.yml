@@ -36,7 +36,10 @@ jobs:
           EOF
 
       - name: Build release APK (arm64)
-        run: flutter build apk --release --target-platform android-arm64
+        run: |
+          flutter build apk --release --target-platform android-arm64 \
+            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
+            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
 
       - name: Extract latest changelog entry
         run: awk '/^## /{n++} n==1' CHANGELOG.md > release-notes.md

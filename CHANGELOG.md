@@ -3,23 +3,33 @@
 Notes for each build pushed to `production`. The top entry is what
 Firebase App Distribution shows testers for the current release.
 
-## v0.7.0 — Pull sync: changes now flow back from other devices
+## v0.7.0 — Two-way sync: changes flow back, and the later edit wins
 
-- Sync is now **two-way**. After every push (auto or manual "Sync now"),
-  the app also **pulls** changes made on other devices signed into the
-  same account and applies them locally — creating rows that don't exist
-  yet, or updating existing ones when the incoming version is newer
-  (last-write-wins by `updated_at`, so an edit made on this device after
-  its last sync is never silently overwritten).
-- Each table (transactions, categories) tracks its own "last pulled"
-  watermark, so a pull only fetches what actually changed since last time,
-  and a failure in one table's pull doesn't block or roll back the other's.
-- The "Sync now" result now reports both directions, e.g. "Synced 2
-  changes out, 1 change in."
-- **Known gap:** deleting a row on one device does not yet remove it on
-  another — pushed deletes are hard deletes with no server-side record
-  for a pull to discover. Planned as a follow-up (soft-delete/tombstone
-  column).
+- Sync is now **two-way**. After every push (automatic or "Sync now"), the
+  app also **pulls** changes made on other devices signed into the same
+  account and applies them here, creating rows that don't exist yet and
+  updating ones that changed.
+- **The later edit wins, in both directions.** An incoming change replaces
+  what is on this device only if it is newer, and a change you made offline
+  can no longer overwrite a newer edit made elsewhere: the server now
+  ignores a stale write, and the newer version comes down on the next pull.
+  Two edits in the same second tie, and this device keeps its own copy.
+- "Sync now" reports both directions, e.g. "Synced 2 changes out, 1 change
+  in." It no longer counts your own change coming back as an incoming one.
+- A new device now brings in categories before the transactions that use
+  them, so transactions no longer fail to appear on the first sync.
+- Each table (transactions, categories) remembers where its last pull got
+  to, so a pull only fetches what changed, and a failure in one table's
+  pull doesn't hold up the other.
+- Behind the scenes: the backend database schema is now versioned in the
+  repository (`supabase/migrations`), with indexes that speed up the pull.
+- **Known gaps:**
+  - Deleting a row on one device does not yet remove it on another.
+  - Transactions can be added and deleted but not edited yet.
+  - Sign-in is anonymous, so your data doesn't follow you to a reinstall
+    or a second phone yet.
+  - An older version of the app on another device doesn't have the
+    "ignore stale writes" check until it is updated.
 
 ## v0.6.0 — Push sync to Supabase & manual "Sync now"
 
