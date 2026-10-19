@@ -1,5 +1,90 @@
 # Release Notes
 
+### v0.7.0 — Pull sync, last-write-wins on both halves, versioned backend schema
+
+Completes two-way sync: remote changes are pulled and merged, conflicts are
+resolved by `updated_at` on both push and pull, and the Supabase schema moves
+into the repository. See [Sync flow, end to end](../README.md#sync-flow-end-to-end),
+[Pull sync](../README.md#pull-sync-downloading-changes-from-other-devices) and
+[Backend schema](../README.md#backend-schema-supabase) in the README.
+
+**Pull sync**
+
+- `updatedAt` (local) and `updated_at` (remote) on `transactions` and
+  `categories`, set explicitly by the client on every write (no server
+  trigger, so it records when the edit happened, not when it reached the
+  server). Schema version 5 adds it; version 6 adds `SyncMeta`, a small
+  key-value table holding one `lastPulledAt:<entity>` watermark per table.
+- `SyncRepositoryImpl.pullRemoteChanges()` pulls categories first (they are
+  referenced by transactions under a foreign key), per table:
+  `where user_id = me and updated_at > lastPulledAt`. A row is applied only
+  if there is no local copy or its `updated_at` is strictly newer; a tie or
+  an older row keeps the local copy. Applying uses a direct Drift upsert that
+  bypasses the repositories, so a pulled row is never re-enqueued (that would
+  push, change `updated_at`, and pull forever).
+- The watermark is captured before the query and saved only if that table's
+  pull succeeded, so a failure retries and a row changed mid-pull is picked
+  up next time.
+
+**One sync use case**
+
+- `SyncDataUseCase` runs push then pull and returns a `SyncSummary`; a push
+  failure skips pull. `SyncCubit` now only decides when to sync and maps the
+  result to `SyncState` (`allFailed` stays in the cubit, since it needs the
+  pre-sync pending count).
+
+**Last-write-wins on push**
+
+- `pushEntry` used an unconditional upsert, and a sync pushes before it
+  pulls, so a stale offline edit could overwrite a newer remote edit before
+  the pull saw it. It now calls Postgres functions `push_category` and
+  `push_transaction` (`rpc`) that write only if the stored `updated_at` is
+  not newer (`<=`, so a retried push still succeeds). A rejected stale write
+  is a silent no-op: the entry is dequeued and the pull brings the newer row
+  down. `rpcCallFor` chooses the function and its `p_` arguments; an unknown
+  entity type throws and stays queued.
+
+**Timestamps**
+
+- Drift stores `DateTime` as whole seconds while the queued payload kept
+  milliseconds, so the server held a slightly newer `updated_at` than the
+  local row and the pull re-applied the device's own push ("1 pushed, 1
+  applied"). `nowForSync()` truncates to the second before both are built.
+  Trade-off: last-write-wins resolves at one-second granularity.
+
+**Backend schema**
+
+- `supabase/migrations/`: a baseline of the live schema (reconstructed from
+  catalog queries, no Docker), `(user_id, updated_at)` indexes for the pull
+  query, and the push functions. The baseline was registered with
+  `migration repair`; the others were pushed with `supabase db push`.
+
+**Release pipeline**
+
+- The tag-triggered GitHub Release build now passes the Supabase
+  `--dart-define` values like the production deploy does; without them the
+  attached APK had no backend configured.
+
+**Tests**
+
+- `sync_repository_pull_test.dart`: last-write-wins for both tables, the
+  applied row carrying the remote `updatedAt`, a repeat pull applying
+  nothing, pull never enqueueing, pull order against the foreign key, and
+  the watermark (saved, reused as `since`, not advanced on failure).
+- `pull_conflict_test.dart`: a real offline edit against a remote edit, and a
+  whole-sync test against a fake server that follows the push functions'
+  rule. `sync_data_usecase_test.dart`, `sync_cubit_test.dart`, and
+  `rpcCallFor` tests in `supabase_sync_data_source_test.dart`. 201 tests.
+- The push rule itself is SQL and was verified in the Supabase SQL editor
+  (new row inserted, older ignored, newer and equal applied).
+
+**Not built yet**
+
+- Delete propagation (needs soft deletes), transaction editing, per-row error
+  messages in the UI, real (non-anonymous) auth, and syncing the default
+  categories for a real account. See
+  [Not yet done](implemented.md#-not-yet-done).
+
 ### v0.6.0 — Push sync to Supabase & manual "Sync now"
 
 Adds the drain side of the transactional outbox described below, plus a
