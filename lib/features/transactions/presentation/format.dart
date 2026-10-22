@@ -11,7 +11,7 @@ String formatAmountMinor(int amountMinor) {
   final abs = amountMinor.abs();
   final whole = abs ~/ 100;
   final cents = (abs % 100).toString().padLeft(2, '0');
-  return '$sign\$$whole.$cents';
+  return '\u200E$sign\$$whole.$cents';
 }
 
 /// Parses a user-typed amount (e.g. the text in the amount field) into

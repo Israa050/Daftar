@@ -29,8 +29,8 @@ class BalanceSummaryCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(22),
           border: Border.all(color: colors.lineSoft),
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            begin: AlignmentDirectional.topStart,
+            end: AlignmentDirectional.bottomEnd,
             colors: [colors.accentWash, colors.surfaceRaised],
             stops: const [0.0, 0.7],
           ),

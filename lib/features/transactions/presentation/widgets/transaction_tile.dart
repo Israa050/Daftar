@@ -36,7 +36,7 @@ class TransactionTile extends StatelessWidget {
             color: colors.expenseWash,
             borderRadius: BorderRadius.circular(16),
           ),
-          alignment: Alignment.centerRight,
+          alignment: AlignmentDirectional.centerEnd,
           padding: const EdgeInsets.symmetric(horizontal: 18),
           child: Icon(Icons.delete_outline, color: colors.expense),
         ),
@@ -104,7 +104,7 @@ class TransactionTile extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                '$sign${formatAmountMinor(transaction.amountMinor)}',
+                '\u200E$sign${formatAmountMinor(transaction.amountMinor)}',
                 style: TextStyle(
                   color: color,
                   fontWeight: FontWeight.w700,
@@ -130,7 +130,7 @@ class _CategoryPill extends StatelessWidget {
     final colors = AppColors.of(context);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(6, 2, 8, 2),
+      padding: const EdgeInsetsDirectional.fromSTEB(6, 2, 8, 2),
       decoration: BoxDecoration(
         color: colors.lineSoft,
         borderRadius: BorderRadius.circular(999),
