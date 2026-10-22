@@ -13,6 +13,7 @@ import 'package:stockflow/features/categories/bloc/category_totals_cubit.dart';
 import 'package:stockflow/features/transactions/bloc/transactions_bloc.dart';
 import 'package:stockflow/features/transactions/presentation/screens/transactions_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
@@ -53,8 +54,14 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('en'), Locale('ar')],
       debugShowCheckedModeBanner: false,
-      title: 'StockFlow',
+      title: 'Daftar',
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.system,

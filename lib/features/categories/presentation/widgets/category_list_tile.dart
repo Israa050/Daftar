@@ -34,7 +34,7 @@ class CategoryListTile extends StatelessWidget {
             Container(
               width: 12,
               height: 12,
-              margin: const EdgeInsets.only(right: 12),
+              margin: const EdgeInsetsDirectional.only(end: 12),
               decoration: color == null
                   ? BoxDecoration(
                       shape: BoxShape.circle,

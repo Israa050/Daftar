@@ -148,7 +148,7 @@ class _CategoryTotalRow extends StatelessWidget {
           Container(
             width: 9,
             height: 9,
-            margin: const EdgeInsets.only(right: 10),
+            margin: const EdgeInsetsDirectional.only(end: 10),
             decoration: color == null
                 ? BoxDecoration(
                     shape: BoxShape.circle,
@@ -187,7 +187,7 @@ class _CategoryTotalRow extends StatelessWidget {
             width: 64,
             child: Text(
               formatAmountMinor(entity.totalMinor),
-              textAlign: TextAlign.right,
+              textAlign: TextAlign.end,
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
