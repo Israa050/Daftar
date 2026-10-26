@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:stockflow/core/theme/app_colors.dart';
 import 'package:stockflow/features/categories/bloc/category_totals_cubit.dart';
 import 'package:stockflow/features/categories/domain/entities/category_total_entity.dart';
+import 'package:stockflow/features/categories/presentation/widgets/spending_chart.dart';
 import 'package:stockflow/features/transactions/presentation/format.dart';
 
 /// Card showing total expense per category, reactively updated from
@@ -107,13 +108,16 @@ class _CategoryTotalsCardState extends State<CategoryTotalsCard> {
                                   ),
                                 ),
                               )
-                            else
+                            else ...[
+                              SpendingChart(totals: sorted),
+                              const SizedBox(height: 8),
                               ...sorted.map(
                                 (entity) => _CategoryTotalRow(
                                   entity: entity,
                                   maxTotalMinor: sorted.first.totalMinor,
                                 ),
                               ),
+                            ],
                           ],
                         ),
                 ),
