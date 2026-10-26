@@ -188,7 +188,7 @@ class _CategoryTotalRow extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           SizedBox(
-            width: 64,
+            width: 84,
             child: Text(
               formatAmountMinor(entity.totalMinor),
               textAlign: TextAlign.end,
