@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:stockflow/core/extensions/motion_extension.dart';
 import 'package:stockflow/core/theme/app_colors.dart';
 import 'package:stockflow/features/categories/bloc/category_totals_cubit.dart';
 import 'package:stockflow/features/categories/domain/entities/category_total_entity.dart';
@@ -73,7 +74,9 @@ class _CategoryTotalsCardState extends State<CategoryTotalsCard> {
                           const SizedBox(width: 4),
                           AnimatedRotation(
                             turns: _expanded ? 0.5 : 0,
-                            duration: const Duration(milliseconds: 200),
+                            duration: context.motion(
+                              const Duration(milliseconds: 200),
+                            ),
                             child: Icon(
                               Icons.keyboard_arrow_down_rounded,
                               size: 18,
@@ -86,7 +89,7 @@ class _CategoryTotalsCardState extends State<CategoryTotalsCard> {
                   ),
                 ),
                 AnimatedSize(
-                  duration: const Duration(milliseconds: 200),
+                  duration: context.motion(const Duration(milliseconds: 200)),
                   curve: Curves.easeOutCubic,
                   alignment: Alignment.topCenter,
                   child: !_expanded

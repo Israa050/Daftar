@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:stockflow/core/extensions/motion_extension.dart';
 import 'package:stockflow/core/theme/app_colors.dart';
 import 'package:stockflow/features/categories/domain/entities/category_total_entity.dart';
 import 'package:stockflow/features/transactions/presentation/format.dart';
@@ -72,6 +73,8 @@ class SpendingChart extends StatelessWidget {
     return SizedBox(
       height: 140,
       child: BarChart(
+        duration: context.motion(const Duration(milliseconds: 200)),
+        curve: Curves.easeInOut,
         BarChartData(
           maxY: maxY,
           minY: 0,

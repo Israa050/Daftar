@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stockflow/core/extensions/motion_extension.dart';
 import 'package:stockflow/core/theme/app_colors.dart';
 import 'package:stockflow/core/theme/app_theme.dart';
 import 'package:stockflow/features/transactions/presentation/format.dart';
@@ -48,14 +49,20 @@ class BalanceSummaryCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 6),
-            Text(
-              formatAmountMinor(balance),
-              style: TextStyle(
-                fontFamily: appDisplayFontFamily,
-                fontSize: 34,
-                fontWeight: FontWeight.w500,
-                letterSpacing: -0.3,
-                color: colors.ink,
+            AnimatedSwitcher(
+              duration: context.motion(const Duration(milliseconds: 200)),
+              child: Text(
+                formatAmountMinor(balance),
+                // The key tells AnimatedSwitcher this is a new value to
+                // cross-fade to; without it the text would just swap.
+                key: ValueKey(balance),
+                style: TextStyle(
+                  fontFamily: appDisplayFontFamily,
+                  fontSize: 34,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: -0.3,
+                  color: colors.ink,
+                ),
               ),
             ),
             const SizedBox(height: 12),
