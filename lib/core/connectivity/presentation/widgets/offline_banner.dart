@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:stockflow/core/connectivity/cubit/connectivity_cubit.dart';
 import 'package:stockflow/core/connectivity/domain/network_status.dart';
+import 'package:stockflow/core/extensions/motion_extension.dart';
 
 /// A thin strip shown above the screen content while the device has no
 /// network interface. Driven by [ConnectivityCubit]; collapses to nothing
@@ -23,7 +24,7 @@ class OfflineBanner extends StatelessWidget {
         final offline = status == NetworkStatus.offline;
 
         return AnimatedSize(
-          duration: const Duration(milliseconds: 200),
+          duration: context.motion(const Duration(milliseconds: 200)),
           alignment: Alignment.topCenter,
           child: offline
               ? Material(
