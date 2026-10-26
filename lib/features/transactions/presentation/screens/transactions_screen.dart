@@ -183,16 +183,18 @@ class _TransactionsBody extends StatelessWidget {
             .where((t) => t.type == TransactionType.expense)
             .fold<int>(0, (sum, t) => sum + t.amountMinor);
 
-        return Column(
-          children: [
-            BalanceSummaryCard(income: income, expense: expense),
-            const CategoryTotalsCard(),
-            Expanded(
-              child: TransactionsList(
-                data: data,
-                onDelete: onDelete,
-                categories: categories,
-              ),
+        // One scroll view for the whole page: the cards scroll away with the
+        // list instead of staying pinned and squeezing it.
+        return CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: BalanceSummaryCard(income: income, expense: expense),
+            ),
+            const SliverToBoxAdapter(child: CategoryTotalsCard()),
+            TransactionsList(
+              data: data,
+              onDelete: onDelete,
+              categories: categories,
             ),
           ],
         );
