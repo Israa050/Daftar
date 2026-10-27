@@ -62,11 +62,17 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
               },
             ),
             duration: _undoDuration,
+            // A SnackBar with an action persists by default, ignoring its
+            // duration. The undo window is the whole point of the countdown,
+            // so close on time: the delete only happens when it closes.
+            persist: false,
           ),
         )
         .closed
         .then((_) {
-          if (undone) return;
+          // The bloc can be closed by now (the 5-second undo window outlives
+          // the screen); adding an event to a closed bloc throws.
+          if (undone || bloc.isClosed) return;
           bloc.add(DeleteTransactionEvent(id: transaction.id));
           // _pendingDeleteIds is pruned via onConfirmedGone once the bloc
           // confirms the row is actually gone, so it never grows unbounded.
@@ -135,70 +141,73 @@ class _TransactionsBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<TransactionsBloc, TransactionsState>(
-      builder: (context, state) {
-        final allData = switch (state) {
-          TransactionsInitial() => null,
-          Loaded(:final data) => data,
-          TransactionsError(:final previousData) => previousData,
-        };
-        final categories = switch (state) {
-          Loaded(:final categories) => categories,
-          _ => const <CategoryEntity>[],
-        };
-
-        if (state is TransactionsError) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!context.mounted) return;
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text(state.message)));
-          });
-        }
-
-        if (allData == null) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (state is Loaded && pendingDeleteIds.isNotEmpty) {
-          final stillPresent = allData.map((t) => t.id).toSet();
-          final confirmedGone = pendingDeleteIds
-              .where((id) => !stillPresent.contains(id))
-              .toList();
-          if (confirmedGone.isNotEmpty) {
-            WidgetsBinding.instance.addPostFrameCallback(
-              (_) => onConfirmedGone(confirmedGone),
-            );
-          }
-        }
-
-        final data = pendingDeleteIds.isEmpty
-            ? allData
-            : allData.where((t) => !pendingDeleteIds.contains(t.id)).toList();
-
-        final income = data
-            .where((t) => t.type == TransactionType.income)
-            .fold<int>(0, (sum, t) => sum + t.amountMinor);
-        final expense = data
-            .where((t) => t.type == TransactionType.expense)
-            .fold<int>(0, (sum, t) => sum + t.amountMinor);
-
-        // One scroll view for the whole page: the cards scroll away with the
-        // list instead of staying pinned and squeezing it.
-        return CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: BalanceSummaryCard(income: income, expense: expense),
-            ),
-            const SliverToBoxAdapter(child: CategoryTotalsCard()),
-            TransactionsList(
-              data: data,
-              onDelete: onDelete,
-              categories: categories,
-            ),
-          ],
-        );
+    return BlocListener<TransactionsBloc, TransactionsState>(
+      // Show an error once per error state. Doing this in the builder would
+      // schedule another snackbar on every rebuild while the state stays an
+      // error (for example after each swipe).
+      listenWhen: (_, current) => current is TransactionsError,
+      listener: (context, state) {
+        if (state is! TransactionsError) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(state.message)));
       },
+      child: BlocBuilder<TransactionsBloc, TransactionsState>(
+        builder: (context, state) {
+          final allData = switch (state) {
+            TransactionsInitial() => null,
+            Loaded(:final data) => data,
+            TransactionsError(:final previousData) => previousData,
+          };
+          final categories = switch (state) {
+            Loaded(:final categories) => categories,
+            _ => const <CategoryEntity>[],
+          };
+
+          if (allData == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (state is Loaded && pendingDeleteIds.isNotEmpty) {
+            final stillPresent = allData.map((t) => t.id).toSet();
+            final confirmedGone = pendingDeleteIds
+                .where((id) => !stillPresent.contains(id))
+                .toList();
+            if (confirmedGone.isNotEmpty) {
+              WidgetsBinding.instance.addPostFrameCallback(
+                (_) => onConfirmedGone(confirmedGone),
+              );
+            }
+          }
+
+          final data = pendingDeleteIds.isEmpty
+              ? allData
+              : allData.where((t) => !pendingDeleteIds.contains(t.id)).toList();
+
+          final income = data
+              .where((t) => t.type == TransactionType.income)
+              .fold<int>(0, (sum, t) => sum + t.amountMinor);
+          final expense = data
+              .where((t) => t.type == TransactionType.expense)
+              .fold<int>(0, (sum, t) => sum + t.amountMinor);
+
+          // One scroll view for the whole page: the cards scroll away with the
+          // list instead of staying pinned and squeezing it.
+          return CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: BalanceSummaryCard(income: income, expense: expense),
+              ),
+              const SliverToBoxAdapter(child: CategoryTotalsCard()),
+              TransactionsList(
+                data: data,
+                onDelete: onDelete,
+                categories: categories,
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
