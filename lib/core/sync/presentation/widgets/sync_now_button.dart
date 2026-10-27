@@ -4,6 +4,7 @@ import 'package:stockflow/core/connectivity/cubit/connectivity_cubit.dart';
 import 'package:stockflow/core/connectivity/domain/network_status.dart';
 import 'package:stockflow/core/sync/cubit/pending_sync_cubit.dart';
 import 'package:stockflow/core/sync/cubit/sync_cubit.dart';
+import 'package:stockflow/core/sync/presentation/widgets/sync_icon.dart';
 
 class SyncNowButton extends StatelessWidget {
   const SyncNowButton({super.key});
@@ -32,13 +33,7 @@ class SyncNowButton extends StatelessWidget {
           onPressed: disabledReason != null
               ? null
               : () => context.read<SyncCubit>().syncNow(),
-          icon: inProgress
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.cloud_upload_outlined),
+          icon: const SyncIcon(),
           label: const Text('Sync now'),
         );
 

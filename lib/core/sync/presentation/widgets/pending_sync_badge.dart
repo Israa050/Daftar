@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:stockflow/core/sync/cubit/pending_sync_cubit.dart';
+import 'package:stockflow/core/sync/presentation/widgets/sync_icon.dart';
 import 'package:stockflow/core/sync/presentation/widgets/sync_sheet.dart';
 
 /// App-bar action showing how many local changes are waiting to sync.
@@ -22,7 +23,7 @@ class PendingSyncBadge extends StatelessWidget {
           _ => '$count changes waiting to sync',
         };
 
-        final icon = const Icon(Icons.cloud_upload_outlined);
+        const icon = SyncIcon();
 
         return IconButton(
           tooltip: tooltip,
