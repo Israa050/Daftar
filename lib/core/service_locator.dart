@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart';
 import 'package:get_it/get_it.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:stockflow/core/connectivity/cubit/connectivity_cubit.dart';
@@ -7,6 +8,7 @@ import 'package:stockflow/core/connectivity/domain/usecases/watch_connectivity_u
 import 'package:stockflow/core/sync/cubit/pending_sync_cubit.dart';
 import 'package:stockflow/core/sync/cubit/sync_cubit.dart';
 import 'package:stockflow/core/sync/data/datasources/supabase_sync_data_source.dart';
+import 'package:stockflow/core/sync/data/datasources/sync_remote_data_source.dart';
 import 'package:stockflow/core/sync/data/repos/sync_queue_repository_impl.dart';
 import 'package:stockflow/core/sync/data/repos/sync_repository_impl.dart';
 import 'package:stockflow/core/sync/domain/repositories/sync_queue_repository.dart';
@@ -44,7 +46,13 @@ import 'package:stockflow/features/categories/domain/usecases/watch_category_tot
 
 final getIt = GetIt.instance;
 
-void setupServiceLocator() {
+/// Registers every dependency.
+///
+/// [database] is the local database connection; it defaults to the real
+/// on-disk one. An integration test passes an in-memory connection, and can
+/// replace other registrations (the connectivity repository, the sync remote)
+/// with fakes before anything resolves them.
+void setupServiceLocator({QueryExecutor? database}) {
   // Requires Supabase.initialize() to have already completed in main().
   getIt.registerLazySingleton<SupabaseClient>(() => Supabase.instance.client);
 
@@ -63,7 +71,7 @@ void setupServiceLocator() {
   );
 
   getIt.registerLazySingleton<TransactionsDataSource>(
-    () => TransactionsDataSource(openTransactionsConnection()),
+    () => TransactionsDataSource(database ?? openTransactionsConnection()),
   );
 
   getIt.registerLazySingleton<SyncQueueRepository>(
@@ -74,14 +82,15 @@ void setupServiceLocator() {
     () => WatchPendingSyncCountUseCase(getIt<SyncQueueRepository>()),
   );
 
-  getIt.registerLazySingleton<SupabaseSyncDataSource>(
+  // Registered as the interface so a test can swap in an in-memory remote.
+  getIt.registerLazySingleton<SyncRemoteDataSource>(
     () => SupabaseSyncDataSource(client: getIt<SupabaseClient>()),
   );
 
   getIt.registerLazySingleton<SyncRepository>(
     () => SyncRepositoryImpl(
       syncQueueRepository: getIt<SyncQueueRepository>(),
-      supabaseSyncDataSource: getIt<SupabaseSyncDataSource>(),
+      remoteDataSource: getIt<SyncRemoteDataSource>(),
       dataSource: getIt<TransactionsDataSource>(),
     ),
   );

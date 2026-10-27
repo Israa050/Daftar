@@ -1,11 +1,12 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:stockflow/core/sync/data/datasources/sync_remote_data_source.dart';
 import 'package:stockflow/core/sync/domain/entities/operation_type.dart';
 import 'package:stockflow/core/sync/domain/entities/sync_queue_entry_entity.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class SupabaseSyncDataSource {
+class SupabaseSyncDataSource implements SyncRemoteDataSource {
   final SupabaseClient client;
 
   SupabaseSyncDataSource({required this.client});
@@ -18,6 +19,7 @@ class SupabaseSyncDataSource {
   /// Pushes one queued change to Supabase. Throws on a real failure
   /// (network, RLS, bad table name) -- callers (SyncRepository.pushPending)
   /// catch per-entry so one failure doesn't block the rest of the queue.
+  @override
   Future<void> pushEntry(SyncQueueEntryEntity entry) async {
     final tableName = _tableNames[entry.entityType] ?? entry.entityType;
 
@@ -53,6 +55,7 @@ class SupabaseSyncDataSource {
   /// delete, leaving no tombstone to pull, so a delete made on one device
   /// is not currently propagated to others via pull. Out of scope for now
   /// -- see brief.
+  @override
   Future<List<Map<String, dynamic>>> pullChanges({
     required String entityType,
     required DateTime since,

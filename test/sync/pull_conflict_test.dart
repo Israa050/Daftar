@@ -4,7 +4,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:stockflow/core/result.dart';
-import 'package:stockflow/core/sync/data/datasources/supabase_sync_data_source.dart';
+import 'package:stockflow/core/sync/data/datasources/sync_remote_data_source.dart';
 import 'package:stockflow/core/sync/data/repos/sync_queue_repository_impl.dart';
 import 'package:stockflow/core/sync/data/repos/sync_repository_impl.dart';
 import 'package:stockflow/core/sync/domain/entities/operation_type.dart';
@@ -39,7 +39,7 @@ import '../helpers/mocks.dart';
 /// rejected stale write as a normal return (no error), so the client still
 /// dequeues it. This fake mirrors that SQL; the SQL itself is proven in the
 /// Supabase SQL editor, not here.
-class FakeServer extends Fake implements SupabaseSyncDataSource {
+class FakeServer extends Fake implements SyncRemoteDataSource {
   /// Rows in the shape the pull reads (snake_case), keyed by id.
   final Map<String, Map<String, dynamic>> categories = {};
 
@@ -107,7 +107,7 @@ void main() {
     remote = MockSupabaseDataSource();
     syncRepository = SyncRepositoryImpl(
       syncQueueRepository: syncQueueRepository,
-      supabaseSyncDataSource: remote,
+      remoteDataSource: remote,
       dataSource: dataSource,
     );
 
@@ -252,7 +252,7 @@ void main() {
       };
     final repo = SyncRepositoryImpl(
       syncQueueRepository: syncQueueRepository,
-      supabaseSyncDataSource: server,
+      remoteDataSource: server,
       dataSource: dataSource,
     );
     final sync = SyncDataUseCase(
