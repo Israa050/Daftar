@@ -37,7 +37,7 @@ void main() {
     transactionsDataSource = MockTransactionsDataSource();
     repository = SyncRepositoryImpl(
       syncQueueRepository: syncQueueRepository,
-      supabaseSyncDataSource: dataSource,
+      remoteDataSource: dataSource,
       dataSource: transactionsDataSource,
     );
   });

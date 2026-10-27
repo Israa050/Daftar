@@ -26,7 +26,7 @@ void main() {
     );
     syncRepositoryImpl = SyncRepositoryImpl(
       syncQueueRepository: syncQueueRepository,
-      supabaseSyncDataSource: supabaseSyncDataSource,
+      remoteDataSource: supabaseSyncDataSource,
       dataSource: transactionsDataSource,
     );
   });

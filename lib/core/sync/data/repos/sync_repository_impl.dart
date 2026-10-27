@@ -1,7 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:logger/logger.dart';
 import 'package:stockflow/core/result.dart';
-import 'package:stockflow/core/sync/data/datasources/supabase_sync_data_source.dart';
+import 'package:stockflow/core/sync/data/datasources/sync_remote_data_source.dart';
 import 'package:stockflow/core/sync/domain/repositories/sync_queue_repository.dart';
 import 'package:stockflow/core/sync/domain/repositories/sync_repository.dart';
 import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
@@ -12,12 +12,12 @@ final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 class SyncRepositoryImpl implements SyncRepository {
   SyncRepositoryImpl({
     required this.syncQueueRepository,
-    required this.supabaseSyncDataSource,
+    required this.remoteDataSource,
     required this.dataSource,
   });
 
   final SyncQueueRepository syncQueueRepository;
-  final SupabaseSyncDataSource supabaseSyncDataSource;
+  final SyncRemoteDataSource remoteDataSource;
   final TransactionsDataSource dataSource;
 
   // Categories first: transactions.category_id has an FK to categories.
@@ -37,7 +37,7 @@ class SyncRepositoryImpl implements SyncRepository {
 
     for (final entry in entries) {
       try {
-        await supabaseSyncDataSource.pushEntry(entry);
+        await remoteDataSource.pushEntry(entry);
       } catch (e, st) {
         // Push failed -- leave this entry queued and move on. No
         // error/retry bookkeeping; it's simply retried next pushPending().
@@ -101,7 +101,7 @@ class SyncRepositoryImpl implements SyncRepository {
     // instead of being skipped.
     final pullStartedAt = DateTime.now().toUtc();
 
-    final rows = await supabaseSyncDataSource.pullChanges(
+    final rows = await remoteDataSource.pullChanges(
       entityType: entityType,
       since: lastPulledAt,
     );
