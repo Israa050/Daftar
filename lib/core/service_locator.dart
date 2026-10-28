@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:get_it/get_it.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:stockflow/core/app_version.dart';
 import 'package:stockflow/core/connectivity/cubit/connectivity_cubit.dart';
 import 'package:stockflow/core/connectivity/data/connectivity_repository_impl.dart';
 import 'package:stockflow/core/connectivity/domain/connectivity_repository.dart';
@@ -227,6 +228,8 @@ void setupServiceLocator({QueryExecutor? database}) {
         getIt<ExportableSource>(instanceName: 'transactionsExportSource'),
         getIt<ExportableSource>(instanceName: 'categoriesExportSource'),
       ],
+      appVersion: appVersion,
+      schemaVersion: getIt<TransactionsDataSource>().schemaVersion,
     ),
   );
 
