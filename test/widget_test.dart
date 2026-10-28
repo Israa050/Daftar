@@ -1,6 +1,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:stockflow/core/app_version.dart';
 import 'package:stockflow/core/connectivity/cubit/connectivity_cubit.dart';
 import 'package:stockflow/core/connectivity/domain/network_status.dart';
 import 'package:stockflow/core/connectivity/domain/usecases/watch_connectivity_usecase.dart';
@@ -153,6 +154,8 @@ void main() {
           getIt<ExportableSource>(instanceName: 'transactionsExportSource'),
           getIt<ExportableSource>(instanceName: 'categoriesExportSource'),
         ],
+        appVersion: appVersion,
+        schemaVersion: getIt<TransactionsDataSource>().schemaVersion,
       ),
     );
     getIt.registerSingleton<ExportDataUseCase>(
