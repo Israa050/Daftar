@@ -171,6 +171,29 @@ Two complementary approaches are used:
 - **Pure-function tests** (`format_test.dart`,
   `backup/export_serializer_test.dart`) need neither a database nor mocks.
 
+### Integration test (run by hand)
+
+[`integration_test/offline_sync_test.dart`](integration_test/offline_sync_test.dart)
+runs the real app on a device or emulator and proves what the unit tests
+can't: that the pieces are wired together. A transaction added while offline
+is saved, queued and shown as pending (the badge reads `1`) with nothing
+pushed; once the connection returns, the change is pushed and the badge
+clears.
+
+Only the two edges are faked, swapped in through GetIt: the connectivity
+source (`integration_test/fakes/fake_connectivity_repository.dart`) and the
+sync remote (`integration_test/fakes/fake_sync_remote.dart`, which records
+what is pushed). The blocs, the repositories and an in-memory Drift database
+are real. It never touches the real Supabase project, so it needs no secrets.
+
+```bash
+flutter devices                                                  # find the device id
+flutter test integration_test/offline_sync_test.dart -d <device-id>
+```
+
+The first run builds a debug APK and takes a few minutes; later runs take
+about a minute. Keep the phone unlocked while it runs.
+
 ### Continuous integration
 
 Every pull request into `main` runs
@@ -178,6 +201,20 @@ Every pull request into `main` runs
 dependency install → Drift code generation → `dart format` check →
 `flutter analyze` → `flutter test`. A PR can't merge with a formatting
 issue, an analyzer warning, or a failing test.
+
+**The integration test is not part of CI; it stays manual for now.**
+`flutter test` on a plain Linux runner has no device to run it on. Adding one
+means booting an Android emulator (which needs hardware acceleration set up
+on the runner) or building the Linux desktop target under a virtual display,
+which adds minutes to every pull request and is a common source of flaky
+failures. The unit tests already run on every PR, and the integration test
+covers wiring that changes rarely, so the cost is not worth it yet. Nothing
+blocks adding it later: it needs no secrets, because the remote is faked.
+
+Run it by hand before tagging a release, and after changing sync,
+connectivity or the service locator. If it is automated, the likely first
+step is a Linux desktop job (`flutter test integration_test -d linux` under
+`xvfb`); the repo already has a `linux/` target.
 
 ### Continuous deployment
 
