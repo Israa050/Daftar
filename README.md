@@ -1,6 +1,6 @@
 # Daftar
 
-> Formerly "Money Log" — the repo is still named `money-log`.
+> Formerly "Money Log".
 
 <p align="center">
   <img src="assets/screenshots/daftar-hero.png" alt="Daftar — balance, spending chart and transaction list, in light and dark, with the add-transaction sheet" width="820" />
@@ -35,8 +35,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Israa050/money-log/releases/latest">
-    <img alt="Download APK" src="https://img.shields.io/github/v/release/Israa050/money-log?label=Download%20APK&logo=android&logoColor=white&color=3DDC84" />
+  <a href="https://github.com/Israa050/Daftar/releases/latest">
+    <img alt="Download APK" src="https://img.shields.io/github/v/release/Israa050/Daftar?label=Download%20APK&logo=android&logoColor=white&color=3DDC84" />
   </a>
 </p>
 
