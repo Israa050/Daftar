@@ -59,6 +59,18 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     );
   }
 
+  /// After a submit: stay open and show the error, or close on success.
+  void _onBlocState(BuildContext context, TransactionsState state) {
+    if (state is TransactionsError) {
+      setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(state.message)));
+    } else if (state is Loaded) {
+      Navigator.of(context).pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.of(context);
@@ -77,16 +89,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       ),
       child: BlocListener<TransactionsBloc, TransactionsState>(
         listenWhen: (previous, current) => _isSubmitting,
-        listener: (context, state) {
-          if (state is TransactionsError) {
-            setState(() => _isSubmitting = false);
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text(state.message)));
-          } else if (state is Loaded) {
-            Navigator.of(context).pop();
-          }
-        },
+        listener: _onBlocState,
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
@@ -94,65 +97,19 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: colors.line,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                Text(
-                  'Add transaction',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16.5,
-                    fontWeight: FontWeight.w700,
-                    color: colors.ink,
-                  ),
-                ),
+                const _SheetHandle(),
+                const _SheetTitle(),
                 const SizedBox(height: 18),
-                SegmentedButton<TransactionType>(
-                  segments: const [
-                    ButtonSegment(
-                      value: TransactionType.expense,
-                      label: Text('Expense'),
-                      icon: Icon(Icons.remove),
-                    ),
-                    ButtonSegment(
-                      value: TransactionType.income,
-                      label: Text('Income'),
-                      icon: Icon(Icons.add),
-                    ),
-                  ],
-                  selected: {_type},
-                  onSelectionChanged: (selection) =>
-                      setState(() => _type = selection.first),
+                _TypeSelector(
+                  selected: _type,
+                  onChanged: (type) => setState(() => _type = type),
                 ),
                 const SizedBox(height: 16),
                 if (categories.isNotEmpty) ...[
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: categories.map((category) {
-                      final categoryColor = parseHexColor(category.colorHex);
-                      return ChoiceChip(
-                        avatar: categoryColor == null
-                            ? null
-                            : CircleAvatar(backgroundColor: categoryColor),
-                        label: Text(category.name),
-                        selected: _categoryId == category.id,
-                        selectedColor: categoryColor?.withValues(alpha: 0.3),
-                        onSelected: (selected) {
-                          setState(
-                            () => _categoryId = selected ? category.id : null,
-                          );
-                        },
-                      );
-                    }).toList(),
+                  _CategoryChips(
+                    categories: categories,
+                    selectedId: _categoryId,
+                    onChanged: (id) => setState(() => _categoryId = id),
                   ),
                   const SizedBox(height: 16),
                 ],
@@ -165,14 +122,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                     labelText: 'Amount',
                     prefixText: '\$',
                   ),
-                  validator: (value) {
-                    final trimmed = value?.trim() ?? '';
-                    if (trimmed.isEmpty) return 'Enter an amount';
-                    if (parseAmountToMinor(trimmed) == null) {
-                      return 'Enter a valid positive amount';
-                    }
-                    return null;
-                  },
+                  validator: _validateAmount,
                 ),
                 const SizedBox(height: 14),
                 TextFormField(
@@ -182,24 +132,150 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                FilledButton(
-                  onPressed: _isSubmitting ? null : _submit,
-                  child: _isSubmitting
-                      ? SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: colors.accentInk,
-                          ),
-                        )
-                      : const Text('Save'),
-                ),
+                _SaveButton(isSubmitting: _isSubmitting, onPressed: _submit),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Null when [value] is a valid positive amount, otherwise the message to
+/// show under the field. Mirrors what [parseAmountToMinor] accepts.
+String? _validateAmount(String? value) {
+  final trimmed = value?.trim() ?? '';
+  if (trimmed.isEmpty) return 'Enter an amount';
+  if (parseAmountToMinor(trimmed) == null) {
+    return 'Enter a valid positive amount';
+  }
+  return null;
+}
+
+/// The small grabber bar at the top of the sheet.
+class _SheetHandle extends StatelessWidget {
+  const _SheetHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return Center(
+      child: Container(
+        width: 36,
+        height: 4,
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: colors.line,
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetTitle extends StatelessWidget {
+  const _SheetTitle();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return Text(
+      'Add transaction',
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: 16.5,
+        fontWeight: FontWeight.w700,
+        color: colors.ink,
+      ),
+    );
+  }
+}
+
+/// Expense / income toggle.
+class _TypeSelector extends StatelessWidget {
+  const _TypeSelector({required this.selected, required this.onChanged});
+
+  final TransactionType selected;
+  final ValueChanged<TransactionType> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<TransactionType>(
+      segments: const [
+        ButtonSegment(
+          value: TransactionType.expense,
+          label: Text('Expense'),
+          icon: Icon(Icons.remove),
+        ),
+        ButtonSegment(
+          value: TransactionType.income,
+          label: Text('Income'),
+          icon: Icon(Icons.add),
+        ),
+      ],
+      selected: {selected},
+      onSelectionChanged: (selection) => onChanged(selection.first),
+    );
+  }
+}
+
+/// One chip per category. Tapping the selected chip again clears the choice
+/// (reported as a null id).
+class _CategoryChips extends StatelessWidget {
+  const _CategoryChips({
+    required this.categories,
+    required this.selectedId,
+    required this.onChanged,
+  });
+
+  final List<CategoryEntity> categories;
+  final String? selectedId;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: categories.map((category) {
+        final categoryColor = parseHexColor(category.colorHex);
+        return ChoiceChip(
+          avatar: categoryColor == null
+              ? null
+              : CircleAvatar(backgroundColor: categoryColor),
+          label: Text(category.name),
+          selected: selectedId == category.id,
+          selectedColor: categoryColor?.withValues(alpha: 0.3),
+          onSelected: (selected) => onChanged(selected ? category.id : null),
+        );
+      }).toList(),
+    );
+  }
+}
+
+/// The Save button, which swaps its label for a spinner while submitting.
+class _SaveButton extends StatelessWidget {
+  const _SaveButton({required this.isSubmitting, required this.onPressed});
+
+  final bool isSubmitting;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return FilledButton(
+      onPressed: isSubmitting ? null : onPressed,
+      child: isSubmitting
+          ? SizedBox(
+              height: 20,
+              width: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: colors.accentInk,
+              ),
+            )
+          : const Text('Save'),
     );
   }
 }
