@@ -314,9 +314,10 @@ for how and why.
 - The four seeded default categories are never enqueued (they bypass
   `CategoryRepositoryImpl.addCategory()`), so they never reach Supabase for
   any user — deferred until real, non-anonymous auth exists.
-- `pullRemoteChanges()` (watermark handling, last-write-wins apply logic)
-  has no dedicated unit tests yet — only exercised indirectly via
-  `widget_test.dart`'s app-boot smoke test.
+- An end-to-end offline→sync flow is covered only by the integration test
+  (`integration_test/offline_sync_test.dart`), which needs a device and so
+  does not run in CI — see the README's
+  [Integration test](../README.md#integration-test-run-by-hand).
 - Anonymous auth means no durable identity across reinstalls/devices —
   every fresh install gets a new `auth.uid()` with no data carried over.
 - **Export data's button doesn't trigger an export yet** — `ExportAction`'s
