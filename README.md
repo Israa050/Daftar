@@ -1,24 +1,26 @@
-# Money Log
+# Daftar
+
+> Formerly "Money Log" — the repo is still named `money-log`.
 
 <p align="center">
-  <img src="assets/screenshots/money-log-hero-wide.png" alt="Money Log app overview" width="700" />
+  <img src="assets/screenshots/daftar-hero.png" alt="Daftar — balance, spending chart and transaction list, in light and dark, with the add-transaction sheet" width="820" />
 </p>
 
 <details>
 <summary>More screenshots</summary>
 
 <p align="center">
-  <img src="assets/screenshots/transactions.jpg" alt="Transactions list with balance summary" width="230" />
-  &nbsp;&nbsp;
-  <img src="assets/screenshots/add_transaction.jpg" alt="Add transaction bottom sheet" width="230" />
-  &nbsp;&nbsp;
-  <img src="assets/screenshots/add_transactions_categories_chips.jpg" alt="Add transaction sheet with category chips" width="230" />
-  &nbsp;&nbsp;
-  <img src="assets/screenshots/empty.jpg" alt="Empty state" width="230" />
+  <img src="assets/screenshots/home-light-dark.png" alt="Home screen in light and dark: balance summary and the spending-by-category chart" width="820" />
 </p>
 
 <p align="center">
-  <em>Balance summary &amp; transaction list &nbsp;·&nbsp; Add-transaction sheet &nbsp;·&nbsp; Category picker &nbsp;·&nbsp; Empty state</em>
+  <img src="assets/screenshots/home-light.jpg" alt="Home screen, light" width="230" />
+  &nbsp;&nbsp;
+  <img src="assets/screenshots/home-dark.jpg" alt="Home screen, dark" width="230" />
+</p>
+
+<p align="center">
+  <em>Balance, income/expense pills, and a live spending chart above the category rows &nbsp;·&nbsp; the sync badge shows how many changes are waiting</em>
 </p>
 
 </details>
@@ -39,16 +41,22 @@
 </p>
 
 <p align="center">
-  <a href="https://claude.ai/code/artifact/7ef70167-84d3-4ec5-b1da-6acea789d354">📊 The Reactive Loop — interactive diagram</a>
+  <a href="https://claude.ai/code/artifact/7ef70167-84d3-4ec5-b1da-6acea789d354">📊 Interactive architecture diagram</a>
   &nbsp;·&nbsp;
-  <a href="https://claude.ai/code/artifact/97b41c14-86fe-47d7-bbc0-a13aed14b7d2">🖱️ Live transactions demo</a>
+  <a href="https://claude.ai/code/artifact/97b41c14-86fe-47d7-bbc0-a13aed14b7d2">🖱️ Live interactive demo</a>
+  &nbsp;·&nbsp;
+  <a href="https://drive.google.com/file/d/1nQkCstSZAbhRjJtGAFgpa33XMK7P3h3f/view?usp=sharing">🎬 App demo video</a>
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/demo.gif" alt="Daftar in use: adding a transaction and the balance, chart and list updating live" width="260" />
 </p>
 
 ---
 
 ## 📖 About
 
-Money Log is a small, focused personal-finance tracker: log income and
+Daftar is a small, focused personal-finance tracker: log income and
 expenses, see your balance update instantly, and undo a delete before it's
 final. It exists as a reference implementation of a **fully reactive**
 Flutter architecture — every screen is driven by a live database stream, not
@@ -68,6 +76,7 @@ delete with a countdown undo.
 
 - 📊 **Balance summary** — live total balance with income/expense breakdown
 - 📈 **Spending by category** — a collapsible card showing total expenses grouped by category (plus an "Uncategorized" bucket), each row live-updated the instant a matching transaction is added or deleted
+- 📊 **Spending chart** — a bar chart at the top of the same card, fed by the existing category-totals stream (no second query), with colours matching the rows below; the bar order flips under right-to-left so the largest bar stays on the leading side
 - 📋 **Transaction list** — card-styled rows with type icon, note, date, amount, and a color-coded category tag when one is set
 - ➕ **Add transactions** — bottom sheet with an income/expense toggle, amount, optional note, and optional category
 - 🏷️ **Categories** — pick from four seeded default categories (Food, Transport, Shopping, Bills) when adding a transaction, shown as color-coded chips; the same colors carry through to the transaction list and the category totals card
@@ -78,6 +87,8 @@ delete with a countdown undo.
 - ☁️ **Push sync to Supabase** — queued local writes are pushed to a Supabase backend (anonymous auth, RLS scoped to `auth.uid()`) whenever connectivity comes back online or a new change is queued while already online; each row pushes independently and failed rows simply stay queued for the next retry — no status/retry-count bookkeeping needed, since the push functions and delete are idempotent
 - 🔁 **Manual "Sync now"** — the sync sheet (opened from the pending-changes badge) shows the queued-change count and a button to trigger a push-then-pull on demand, disabled with a reason (syncing / offline / nothing queued) instead of just doing nothing; a result snackbar ("Synced N changes out, M in" / "Couldn't send your changes" / "Already up to date") appears only for this manual path, never for the silent auto-trigger
 - 🔃 **Pull sync from other devices** — after every push, the app also pulls changes made elsewhere on the same account and applies them locally with last-write-wins (by `updated_at`), so edits on one device eventually show up on another; each table tracks its own sync watermark independently (remote deletes are a known, documented gap — not yet propagated)
+- 🌐 **Arabic / RTL layout** — the whole app mirrors under an Arabic locale (axes, chip and list direction, swipe side), and amounts keep their sign in front of the currency symbol in both directions; the UI strings are still English (translation is a tracked gap)
+- ✨ **Purposeful animation** — only data and state changes move: the balance cross-fades to its new value, the chart bars glide, and the app-bar sync icon spins while a sync is running. All of it respects the system "reduce motion" setting through a single `context.motion` helper
 - 🔄 **Fully reactive** — every screen is driven by a live Drift stream; add/delete never trigger a manual reload
 - 💾 **Local persistence** — everything is stored in an on-device SQLite database via Drift
 - 📤 **Export data** — an app-bar action serializes every transaction and category to a single JSON file (off the main isolate) and opens the OS share sheet, doubling as a manual backup for this offline-first app
@@ -97,7 +108,8 @@ delete with a countdown undo.
 | Sharing        | [share_plus](https://pub.dev/packages/share_plus) (export file → OS share sheet) |
 | IDs            | [uuid](https://pub.dev/packages/uuid) (client-generated v4)   |
 | Logging        | [logger](https://pub.dev/packages/logger)                     |
-| Testing        | [bloc_test](https://pub.dev/packages/bloc_test) + [mocktail](https://pub.dev/packages/mocktail) |
+| Charts         | [fl_chart](https://pub.dev/packages/fl_chart)                 |
+| Testing        | [bloc_test](https://pub.dev/packages/bloc_test) + [mocktail](https://pub.dev/packages/mocktail) + [integration_test](https://docs.flutter.dev/testing/integration-tests) |
 | CI             | [GitHub Actions](.github/workflows/flutter-test.yml)          |
 | CD             | [GitHub Actions](.github/workflows/deploy-production.yml) + [Firebase App Distribution](https://firebase.google.com/docs/app-distribution) |
 
@@ -245,7 +257,7 @@ There is no "refresh" step anywhere in this app. A write lands in SQLite,
 Drift's `.watch()` query notices the table changed, and the new list arrives
 back at the screen on its own.
 
-**→ [Open the interactive loop diagram](https://claude.ai/code/artifact/7ef70167-84d3-4ec5-b1da-6acea789d354)**
+**→ [Open the interactive architecture diagram](https://claude.ai/code/artifact/7ef70167-84d3-4ec5-b1da-6acea789d354)**
 for a visual walkthrough of the cycle described below.
 
 ```mermaid
@@ -593,10 +605,11 @@ it on success. `SyncCubit` decides *when* this runs; `SyncNowButton`/
   on every launch would grow the queue unboundedly. Deferred until real
   (non-anonymous) auth exists, at which point a per-account seed becomes
   possible.
-- **Not yet built:** no mocked-Supabase test exists for `pushEntry()`
-  itself (`SupabaseSyncDataSource.mapForSupabase()` is tested directly
-  instead, together with `rpcCallFor()`, the pure function that picks the
-  Postgres function and its arguments — see [Running tests](#running-tests) —
+- **`pushEntry()`'s Supabase SDK calls aren't driven end-to-end in a test**
+  (`SupabaseSyncDataSource.mapForSupabase()` is tested directly instead, in
+  `sync/supabase_sync_data_source_test.dart`, together with `rpcCallFor()`,
+  the pure function that picks the Postgres function and its arguments — see
+  [Running tests](#running-tests) —
   since mocktail can't reliably intercept the Supabase SDK's `.rpc()` /
   `.from(...)` awaitable chains).
 
@@ -757,7 +770,7 @@ server yet, this is the only real backup path a user has today.
 - **The file is written to the OS temp directory, not app documents.**
   `getTemporaryDirectory()` (via `path_provider`, already a dependency),
   because the file is a transient hand-off to the share sheet — not app
-  state Money Log owns or needs to keep around after the user has saved it
+  state Daftar owns or needs to keep around after the user has saved it
   somewhere else.
 - **`ExportCubit` has exactly one public method, `export()`, and an
   in-flight guard (`if (state is ExportInProgress) return;`).** Matches
@@ -880,11 +893,13 @@ Known gaps: no transaction editing, no remote-delete propagation on sync,
 and anonymous-only auth (no durable identity across reinstalls).
 
 **→ [Full implementation checklist + known gaps](docs/implemented.md)**
+&nbsp;·&nbsp;
+**[Known limitations on the project board ↗](https://github.com/users/Israa050/projects/3)**
 
 ## 🏷️ Release notes
 
-Per-version changelog (v0.1.0 through the current v0.6.0 — push sync to
-Supabase, manual "Sync now", and everything before it) now lives in
+Per-version changelog (v0.1.0 through the current v0.8.0 — the spending
+chart, Arabic/RTL, purposeful animation, and everything before it) now lives in
 **[`docs/release-notes.md`](docs/release-notes.md)**, kept separate from
 this file so the README stays focused on the app as it is today rather than
 how it got here.
