@@ -1,5 +1,105 @@
 # Release Notes
 
+### v0.8.0 — Spending chart, Arabic layout, purposeful motion, and proof it syncs
+
+The app is renamed **Daftar** and becomes presentable and provable: a live
+spending chart, a layout that mirrors under Arabic, animation that only
+follows data and respects the system "reduce motion" setting, and an
+integration test that proves an offline write reaches the server. No new
+tables and no new sync logic. See the [README](../README.md) for the updated
+screenshots, architecture diagram and demo.
+
+**Spending chart**
+
+- A bar chart at the top of the category totals card, one bar per category in
+  the category colour. It takes the same sorted list the rows below it use, so
+  it adds no query and the two can never disagree. Amounts stay integer minor
+  units until `toY`, and tooltips are formatted from the integer total.
+- Shows "No spending yet" when no category has a total above zero.
+- No value axis: the rows give every exact amount and the labels wrapped on
+  narrow screens.
+
+**Arabic and right-to-left layout**
+
+- `flutter_localizations` with `en` and `ar` supported. Margins, alignments,
+  text alignment and the balance gradient use directional values, so the swipe
+  icon, category dots and amount columns land on the right side when mirrored.
+- Chart bars reverse under right-to-left so the largest stays on the leading
+  side.
+- `formatAmountMinor` prefixes a left-to-right mark, so `-$12.50` keeps its
+  sign in front of the currency symbol on an Arabic screen.
+- The UI strings are still English; translating them is a tracked gap.
+
+**A page that scrolls as one**
+
+- The home screen was a column with an expanded list, so the cards stayed
+  pinned and squeezed the list to about one row once the chart was open. It is
+  now one `CustomScrollView`: the cards, then the list and its empty state as
+  slivers, with room at the bottom for the add button. The offline banner stays
+  pinned. The category amount column is wider so `$13000.00` no longer wraps.
+
+**Motion that follows data**
+
+- Only data and state changes animate: the balance cross-fades, the chart bars
+  glide, and the sync icon spins while syncing. Navigation, list rows and
+  sheets stay plain, so motion points at the numbers and a ledger stays steady.
+  The cost is less visual richness, and it is easy to extend because every
+  animation goes through one helper.
+- `context.motion(duration)` returns zero when the system asks to reduce
+  motion, and every animation takes its duration from it, including the existing
+  banner and totals-card animations. The undo countdown is left running on
+  purpose: it tells the user how long they have to undo.
+- `SyncIcon` is the app's one explicit animation: a single `AnimationController`
+  that repeats only while `SyncCubit` is syncing, checks the cubit's state when
+  it mounts, shows a static arrow under reduced motion, and is disposed. It is
+  used in the app-bar badge (so automatic syncs show) and the Sync now button.
+
+**Fixes found along the way**
+
+- **The undo snackbar never closed on its own.** A `SnackBar` with an action
+  persists by default and ignores its duration, so the 5-second countdown ran
+  out and nothing happened; the delete only ran when the snackbar was dismissed
+  some other way. It now sets `persist: false`.
+- The delayed delete is skipped when its bloc is already closed, and the
+  transaction error snackbar is shown from a listener once per error, not from
+  `build` on every rebuild.
+- **Exports carried the wrong versions.** Every export said `appVersion: 0.5.0`
+  and `schemaVersion: 4`. The schema version now comes from the database and the
+  app version from `lib/core/app_version.dart`; a test fails if that constant
+  drifts from `pubspec.yaml`.
+
+**Structure**
+
+- `SyncRemoteDataSource` is an interface, and `setupServiceLocator` accepts a
+  database, so a test can swap in an in-memory database and a fake remote.
+- `AddTransactionSheet.build` went from 141 to 67 lines by splitting out small
+  widgets, behind tests written first.
+
+**Tests**
+
+- `integration_test/offline_sync_test.dart` runs the real app with only the
+  connectivity source and the sync remote faked: add a transaction offline, the
+  badge reads 1 and nothing is pushed; go online, the badge clears and the remote
+  received one create. It needs a device, so it is run by hand (see the README),
+  not in CI.
+- New unit and widget tests for the chart, the motion helper, the balance
+  cross-fade, `SyncIcon` (including its disposal), the home screen's delete and
+  error handling, `ExportCubit`, `BackupRepositoryImpl`, the service locator and
+  the add sheet. 243 unit tests plus the 2 integration tests.
+
+**Docs and housekeeping**
+
+- README rewritten for the rename and this week's features, with new
+  screenshots, and the known limitations now link to the public project board.
+  The GitHub repository was renamed from `money-log` to `Daftar`.
+
+**Not built yet**
+
+- Everything under [Not yet done](implemented.md#-not-yet-done) still stands:
+  delete propagation (needs soft deletes), transaction editing, real
+  (non-anonymous) auth, a working export button, and translated UI strings. Each
+  has an issue on the project board.
+
 ### v0.7.0 — Pull sync, last-write-wins on both halves, versioned backend schema
 
 Completes two-way sync: remote changes are pulled and merged, conflicts are
