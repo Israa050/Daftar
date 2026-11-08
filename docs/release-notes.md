@@ -104,9 +104,9 @@ screenshots, architecture diagram and demo.
 
 Completes two-way sync: remote changes are pulled and merged, conflicts are
 resolved by `updated_at` on both push and pull, and the Supabase schema moves
-into the repository. See [Sync flow, end to end](../README.md#sync-flow-end-to-end),
-[Pull sync](../README.md#pull-sync-downloading-changes-from-other-devices) and
-[Backend schema](../README.md#backend-schema-supabase) in the README.
+into the repository. See [Sync flow, end to end](sync-queue.md#sync-flow-end-to-end),
+[Pull sync](sync-queue.md#pull-sync-downloading-changes-from-other-devices) and
+[Backend schema](database.md#backend-schema-supabase) in the README.
 
 **Pull sync**
 
@@ -189,7 +189,7 @@ into the repository. See [Sync flow, end to end](../README.md#sync-flow-end-to-e
 
 Adds the drain side of the transactional outbox described below, plus a
 user-triggered path on top of it. See
-[Push sync to Supabase](../README.md#push-sync-to-supabase) in the README for
+[Push sync to Supabase](sync-queue.md#push-sync-to-supabase) in the README for
 the full design writeup and
 [`week5-decisions-and-interview-prep.md`](week5-decisions-and-interview-prep.md)
 for the decision log.
@@ -265,7 +265,7 @@ two UI affordances they drive (offline banner, pending-changes badge).
   `OperationType`, `SyncQueueRepository`/`Impl`, and
   `WatchPendingSyncCountUseCase` — the write side of a transactional
   outbox for later Supabase sync. See
-  [Offline sync queue](../README.md#offline-sync-queue-transactional-outbox)
+  [Offline sync queue](sync-queue.md#the-outbox-every-write-enqueues)
   in the README and [`sync-queue.md`](sync-queue.md) for the full design
   writeup (always-enqueue over connectivity-branching, atomic transaction +
   enqueue, snapshot-vs-pointer payload).

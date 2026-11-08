@@ -9,7 +9,7 @@ for how and why.
 ## ✅ What's implemented
 
 - Drift schema for `Transactions` (see the README's
-  [Database schema](../README.md#-database-schema)), with a
+  [Database schema](database.md)), with a
   `.watch()`-backed `allTransactions` stream alongside
   `addTransaction`/`deleteTransaction`, backed by real SQLite via
   `sqlite3_flutter_libs`.
@@ -70,7 +70,7 @@ for how and why.
   through `CategoryTotalEntity`, `CategoryRepository.watchCategoryTotals()`,
   `WatchCategoryTotalsUsecase`, and `CategoryTotalsCubit` (an aggregate-stream
   cubit shaped like `BalanceCubit`, not `TransactionsBloc` — see the
-  README's [Reactive data flow](../README.md#-reactive-data-flow)),
+  [Reactive data flow](reactive-architecture.md)),
   rendered by `CategoryTotalsCard`. The card is collapsible: tapping its
   header toggles an animated expand/collapse (local widget state, not
   persisted) to free vertical space for the transaction list below; the
@@ -108,7 +108,7 @@ for how and why.
 - **Offline sync queue / transactional outbox:** a core, cross-cutting
   layer under `lib/core/sync/` recording every write to `Transactions` and
   `Categories` so it can be pushed to Supabase later — see the README's
-  [Offline sync queue](../README.md#offline-sync-queue-transactional-outbox)
+  [Offline sync queue](sync-queue.md#the-outbox-every-write-enqueues)
   for the full design rationale (always-enqueue, atomic transaction + enqueue,
   snapshot payload).
   - `SyncQueueEntries` Drift table (`id`, `entityType`, `entityId`,
@@ -138,7 +138,7 @@ for how and why.
     not "broken." `PendingSyncCubit` is provided app-wide via
     `BlocProvider.value` in `main.dart`, same as `ConnectivityCubit`.
 - **Push sync + manual "Sync now":** the drain side of the outbox —
-  see the README's [Push sync to Supabase](../README.md#push-sync-to-supabase)
+  see [Push sync to Supabase](sync-queue.md#push-sync-to-supabase)
   for the full design writeup (idempotent per-row pushes, the local→remote
   field mapping, the auto-trigger rules, `SyncCubit`'s state, and the
   `allFailed`-inference trade-off).
@@ -156,10 +156,10 @@ for how and why.
     pull counts), opened by tapping `PendingSyncBadge`.
   - Anonymous Supabase auth (`signInAnonymously()` in `main()`) is what
     gives every write a non-null `auth.uid()` for RLS to check against —
-    see the README's [Push sync to Supabase](../README.md#push-sync-to-supabase)
+    see [Push sync to Supabase](sync-queue.md#push-sync-to-supabase)
     for the durable-identity trade-off this implies.
   - **Not yet built:** remote-delete propagation (see
-    [Pull sync](../README.md#pull-sync-downloading-changes-from-other-devices)),
+    [Pull sync](sync-queue.md#pull-sync-downloading-changes-from-other-devices)),
     per-row error messages surfaced in the UI (only the fact that a push
     failed, not why), and syncing the four seeded default categories for a
     real (non-anonymous) account. See [Not yet done](#-not-yet-done) below.
@@ -254,7 +254,7 @@ for how and why.
   for the release that landed them. Widget/cubit tests for these three
   still pending.
 - **Export data:** a new `lib/features/backup/` feature — see the
-  README's [Export data](../README.md#export-data-manual-backup) for the
+  [Export data](export.md) for the
   full design writeup (the `ExportableSource`/OCP seam, the isolate
   boundary, the envelope format).
   - `ExportableSource` (abstract) plus `TransactionsExportSource` and
@@ -307,7 +307,7 @@ for how and why.
   Two devices editing the same row concurrently resolve as last-write-wins
   (by `updated_at`), with no merge or conflict UI.
 - No `status`/error column on `SyncQueueEntries` (a deliberate choice, see
-  the README's [Push sync to Supabase](../README.md#push-sync-to-supabase))
+  [Push sync to Supabase](sync-queue.md#push-sync-to-supabase))
   means the UI can say a push failed but not *why* — `SyncCompleted.allFailed`
   is inferred from a before/after count comparison, not read from an
   actual error.
@@ -317,7 +317,7 @@ for how and why.
 - An end-to-end offline→sync flow is covered only by the integration test
   (`integration_test/offline_sync_test.dart`), which needs a device and so
   does not run in CI — see the README's
-  [Integration test](../README.md#integration-test-run-by-hand).
+  [Integration test](testing.md#integration-test-run-by-hand).
 - Anonymous auth means no durable identity across reinstalls/devices —
   every fresh install gets a new `auth.uid()` with no data carried over.
 - **Export data's button doesn't trigger an export yet** — `ExportAction`'s
