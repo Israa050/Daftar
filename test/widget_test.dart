@@ -20,7 +20,6 @@ import 'package:stockflow/features/backup/domain/backup_repository.dart';
 import 'package:stockflow/features/backup/domain/entities/exportable_source.dart';
 import 'package:stockflow/features/backup/domain/usecases/export_data_usecase.dart';
 import 'package:stockflow/main.dart';
-import 'package:stockflow/features/transactions/bloc/balance_cubit.dart';
 import 'package:stockflow/features/categories/bloc/category_totals_cubit.dart';
 import 'package:stockflow/features/transactions/bloc/transactions_bloc.dart';
 import 'package:stockflow/features/categories/data/repos/categories_export_source.dart';
@@ -129,9 +128,6 @@ void main() {
         deleteTransactionUseCase: getIt<DeleteTransactionUseCase>(),
         watchCategoriesUseCase: getIt<WatchCategoriesUseCase>(),
       ),
-    );
-    getIt.registerFactory<BalanceCubit>(
-      () => BalanceCubit(watchBalanceUseCase: getIt<WatchBalanceUseCase>()),
     );
     getIt.registerFactory<CategoryTotalsCubit>(
       () => CategoryTotalsCubit(
