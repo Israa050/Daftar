@@ -2,11 +2,10 @@
 
 The full `lib/` directory tree and the dependency-layering rules —
 extracted from the README to keep that file short for a first-time visitor.
-Reactive data flow and the database schema (ERD) stay in the
-[main README](../README.md#-reactive-data-flow) since they're what best
-show the app actually working. See also
-[`technical-decisions.md`](technical-decisions.md) for the trade-offs
-behind specific choices made here.
+See also [`reactive-architecture.md`](reactive-architecture.md) for how data
+actually flows through these layers, [`database.md`](database.md) for the
+schema (ERD), and [`technical-decisions.md`](technical-decisions.md) for the
+trade-offs behind specific choices made here.
 
 ## Project structure
 
@@ -185,7 +184,7 @@ presentation → bloc → domain/usecases → domain/repositories (abstract)
   feature's `data/repos/`) are the only places that know both worlds: they
   implement their domain interface, map Drift's generated rows to/from
   entities, *and* coordinate the atomic write + sync-queue-enqueue described
-  in the README's [Offline sync queue](../README.md#offline-sync-queue-transactional-outbox)
+  in [Offline sync queue](sync-queue.md#the-outbox-every-write-enqueues)
   section.
 - **Use cases** (`domain/usecases/`) are thin, single-method wrappers around
   one repository call each — blocs/cubits depend only on these, never on a

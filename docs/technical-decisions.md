@@ -46,8 +46,8 @@ framing), see
 - **`SyncQueueEntries` was added as schema v4** (`onUpgrade`'s
   `if (from < 4) { await m.createTable(syncQueueEntries); }`) rather than
   bundled into the v3 migration. It's an independent table with no foreign
-  keys to `Transactions`/`Categories` (see the README's
-  [Database schema](../README.md#-database-schema) section for why the
+  keys to `Transactions`/`Categories` (see
+  [Database schema](database.md) for why the
   reference is deliberately soft), so a plain `createTable` was sufficient —
   no `TableMigration`/rebuild needed the way `categoryId`'s FK change
   required.
