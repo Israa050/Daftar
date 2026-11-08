@@ -15,7 +15,11 @@ void main() {
   late SyncQueueRepository syncQueueRepository;
   late SyncRepositoryImpl repository;
   late SupabaseSyncDataSource dataSource;
-  late MockTransactionsDataSource transactionsDataSource;
+  // pushPending() exercises only the queue repo and the remote; the local
+  // DAOs are required by the constructor but unused in these tests.
+  late MockTransactionsDao transactionsDao;
+  late MockCategoriesDao categoriesDao;
+  late MockSyncDao syncDao;
 
   final myEntry = SyncQueueEntryEntity(
     id: 'q1',
@@ -34,11 +38,15 @@ void main() {
   setUp(() {
     syncQueueRepository = MockSyncQueueRepository();
     dataSource = MockSupabaseDataSource();
-    transactionsDataSource = MockTransactionsDataSource();
+    transactionsDao = MockTransactionsDao();
+    categoriesDao = MockCategoriesDao();
+    syncDao = MockSyncDao();
     repository = SyncRepositoryImpl(
       syncQueueRepository: syncQueueRepository,
       remoteDataSource: dataSource,
-      dataSource: transactionsDataSource,
+      transactionsDao: transactionsDao,
+      categoriesDao: categoriesDao,
+      syncDao: syncDao,
     );
   });
 

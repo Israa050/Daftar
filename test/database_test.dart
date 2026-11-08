@@ -1,19 +1,26 @@
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
+import 'package:stockflow/core/database/app_database.dart';
+import 'package:stockflow/core/database/default_categories.dart';
+import 'package:stockflow/features/categories/data/daos/categories_dao.dart';
+import 'package:stockflow/features/transactions/data/daos/transactions_dao.dart';
 import 'package:stockflow/features/transactions/domain/entities/transaction_type.dart';
 import 'package:uuid/uuid.dart';
 
 void main() {
-  late TransactionsDataSource dataSource;
+  late AppDatabase db;
+  late TransactionsDao dataSource;
+  late CategoriesDao categoriesDao;
 
   setUp(() {
-    dataSource = TransactionsDataSource(NativeDatabase.memory());
+    db = AppDatabase(NativeDatabase.memory());
+    dataSource = db.transactionsDao;
+    categoriesDao = db.categoriesDao;
   });
 
   tearDown(() async {
-    await dataSource.close();
+    await db.close();
   });
 
   TransactionsCompanion buildEntry({
@@ -46,7 +53,7 @@ void main() {
     group('addTransaction', () {
       test('basic insert + read-back via allTransactions', () async {
         String id = Uuid().v4();
-        await dataSource.addTransaction(
+        await dataSource.insertOne(
           buildEntry(
             id: id,
             amountMinor: 50,
@@ -55,7 +62,7 @@ void main() {
             occurredTime: Value(DateTime.now()),
           ),
         );
-        final result = await dataSource.allTransactions.first;
+        final result = await dataSource.watchAll().first;
         expect(result[0].id, id);
         expect(result[0].amountMinor, 50);
         expect(result[0].note, 'Some note');
@@ -63,7 +70,7 @@ void main() {
       });
       test('note omitted -> stored as null', () async {
         String id = Uuid().v4();
-        await dataSource.addTransaction(
+        await dataSource.insertOne(
           buildEntry(
             id: id,
             amountMinor: 50,
@@ -71,7 +78,7 @@ void main() {
             occurredTime: Value(DateTime.now()),
           ),
         );
-        final result = await dataSource.allTransactions.first;
+        final result = await dataSource.watchAll().first;
         expect(result[0].note, null);
       });
 
@@ -80,10 +87,10 @@ void main() {
         () async {
           final before = DateTime.now();
           final id = const Uuid().v4();
-          await dataSource.addTransaction(buildEntry(id: id));
+          await dataSource.insertOne(buildEntry(id: id));
           final after = DateTime.now();
 
-          final result = (await dataSource.allTransactions.first).single;
+          final result = (await dataSource.watchAll().first).single;
           expect(
             result.occurredTime.isAfter(
               before.subtract(const Duration(seconds: 1)),
@@ -112,11 +119,11 @@ void main() {
         () async {
           final id = const Uuid().v4();
           final backdated = DateTime(2020, 1, 1);
-          await dataSource.addTransaction(
+          await dataSource.insertOne(
             buildEntry(id: id, occurredTime: Value(backdated)),
           );
 
-          final result = (await dataSource.allTransactions.first).single;
+          final result = (await dataSource.watchAll().first).single;
           expect(result.occurredTime, backdated);
         },
       );
@@ -126,14 +133,14 @@ void main() {
         () async {
           final incomeId = const Uuid().v4();
           final expenseId = const Uuid().v4();
-          await dataSource.addTransaction(
+          await dataSource.insertOne(
             buildEntry(id: incomeId, type: TransactionType.income),
           );
-          await dataSource.addTransaction(
+          await dataSource.insertOne(
             buildEntry(id: expenseId, type: TransactionType.expense),
           );
 
-          final result = await dataSource.allTransactions.first;
+          final result = await dataSource.watchAll().first;
           final income = result.firstWhere((t) => t.id == incomeId);
           final expense = result.firstWhere((t) => t.id == expenseId);
           expect(income.type, TransactionType.income);
@@ -143,23 +150,23 @@ void main() {
 
       test('duplicate id throws; distinct ids both succeed', () async {
         final id = const Uuid().v4();
-        await dataSource.addTransaction(buildEntry(id: id));
+        await dataSource.insertOne(buildEntry(id: id));
 
         expect(
-          () => dataSource.addTransaction(buildEntry(id: id)),
+          () => dataSource.insertOne(buildEntry(id: id)),
           throwsA(anything),
         );
 
-        await dataSource.addTransaction(buildEntry(id: const Uuid().v4()));
-        final result = await dataSource.allTransactions.first;
+        await dataSource.insertOne(buildEntry(id: const Uuid().v4()));
+        final result = await dataSource.watchAll().first;
         expect(result.length, 2);
       });
 
       test('amountMinor stores exact integer values', () async {
         final id = const Uuid().v4();
-        await dataSource.addTransaction(buildEntry(id: id, amountMinor: 350));
+        await dataSource.insertOne(buildEntry(id: id, amountMinor: 350));
 
-        final result = (await dataSource.allTransactions.first).single;
+        final result = (await dataSource.watchAll().first).single;
         expect(result.amountMinor, 350);
       });
     });
@@ -168,35 +175,33 @@ void main() {
       test('deleting an existing id removes exactly that row', () async {
         final keepId = const Uuid().v4();
         final removeId = const Uuid().v4();
-        await dataSource.addTransaction(buildEntry(id: keepId));
-        await dataSource.addTransaction(buildEntry(id: removeId));
+        await dataSource.insertOne(buildEntry(id: keepId));
+        await dataSource.insertOne(buildEntry(id: removeId));
 
-        await dataSource.deleteTransaction(removeId);
+        await dataSource.deleteById(removeId);
 
-        final result = await dataSource.allTransactions.first;
+        final result = await dataSource.watchAll().first;
         expect(result.length, 1);
         expect(result.single.id, keepId);
       });
 
       test('return value equals number of rows deleted (1)', () async {
         final id = const Uuid().v4();
-        await dataSource.addTransaction(buildEntry(id: id));
+        await dataSource.insertOne(buildEntry(id: id));
 
-        final deletedCount = await dataSource.deleteTransaction(id);
+        final deletedCount = await dataSource.deleteById(id);
         expect(deletedCount, 1);
       });
 
       test('deleting a non-existent id returns 0, does not throw', () async {
-        final deletedCount = await dataSource.deleteTransaction(
-          const Uuid().v4(),
-        );
+        final deletedCount = await dataSource.deleteById(const Uuid().v4());
         expect(deletedCount, 0);
       });
     });
 
     group('allTransactions', () {
       test('empty table returns []', () async {
-        final result = await dataSource.allTransactions.first;
+        final result = await dataSource.watchAll().first;
         expect(result, isEmpty);
       });
 
@@ -205,10 +210,10 @@ void main() {
         () async {
           final ids = [const Uuid().v4(), const Uuid().v4(), const Uuid().v4()];
           for (final id in ids) {
-            await dataSource.addTransaction(buildEntry(id: id));
+            await dataSource.insertOne(buildEntry(id: id));
           }
 
-          final result = await dataSource.allTransactions.first;
+          final result = await dataSource.watchAll().first;
           expect(result.map((t) => t.id).toSet(), ids.toSet());
         },
       );
@@ -216,12 +221,12 @@ void main() {
       test('reflects state after a mix of inserts and deletes', () async {
         final keepId = const Uuid().v4();
         final removeId = const Uuid().v4();
-        await dataSource.addTransaction(buildEntry(id: keepId));
-        await dataSource.addTransaction(buildEntry(id: removeId));
+        await dataSource.insertOne(buildEntry(id: keepId));
+        await dataSource.insertOne(buildEntry(id: removeId));
 
-        await dataSource.deleteTransaction(removeId);
+        await dataSource.deleteById(removeId);
 
-        final result = await dataSource.allTransactions.first;
+        final result = await dataSource.watchAll().first;
         expect(result.length, 1);
         expect(result.single.id, keepId);
       });
@@ -231,7 +236,7 @@ void main() {
         () async {
           final id = const Uuid().v4();
           expectLater(
-            dataSource.allTransactions,
+            dataSource.watchAll(),
             emitsInOrder([
               isEmpty,
               predicate<List<Transaction>>(
@@ -240,26 +245,26 @@ void main() {
             ]),
           );
           await Future<void>.delayed(Duration.zero);
-          await dataSource.addTransaction(buildEntry(id: id));
+          await dataSource.insertOne(buildEntry(id: id));
         },
       );
     });
 
     group('balance', () {
       test('empty table -> 0', () async {
-        final result = await dataSource.balance.first;
+        final result = await dataSource.watchBalance().first;
         expect(result, 0);
       });
 
       test('income only -> sum of amountMinor', () async {
-        await dataSource.addTransaction(
+        await dataSource.insertOne(
           buildEntry(
             id: const Uuid().v4(),
             amountMinor: 500,
             type: TransactionType.income,
           ),
         );
-        await dataSource.addTransaction(
+        await dataSource.insertOne(
           buildEntry(
             id: const Uuid().v4(),
             amountMinor: 250,
@@ -267,19 +272,19 @@ void main() {
           ),
         );
 
-        final result = await dataSource.balance.first;
+        final result = await dataSource.watchBalance().first;
         expect(result, 750);
       });
 
       test('income minus expense -> net balance', () async {
-        await dataSource.addTransaction(
+        await dataSource.insertOne(
           buildEntry(
             id: const Uuid().v4(),
             amountMinor: 1000,
             type: TransactionType.income,
           ),
         );
-        await dataSource.addTransaction(
+        await dataSource.insertOne(
           buildEntry(
             id: const Uuid().v4(),
             amountMinor: 350,
@@ -287,19 +292,19 @@ void main() {
           ),
         );
 
-        final result = await dataSource.balance.first;
+        final result = await dataSource.watchBalance().first;
         expect(result, 650);
       });
 
       test('expense exceeding income -> negative balance', () async {
-        await dataSource.addTransaction(
+        await dataSource.insertOne(
           buildEntry(
             id: const Uuid().v4(),
             amountMinor: 100,
             type: TransactionType.income,
           ),
         );
-        await dataSource.addTransaction(
+        await dataSource.insertOne(
           buildEntry(
             id: const Uuid().v4(),
             amountMinor: 400,
@@ -307,7 +312,7 @@ void main() {
           ),
         );
 
-        final result = await dataSource.balance.first;
+        final result = await dataSource.watchBalance().first;
         expect(result, -300);
       });
 
@@ -319,7 +324,7 @@ void main() {
           (amountMinor: 900, type: TransactionType.income),
         ];
         for (final entry in entries) {
-          await dataSource.addTransaction(
+          await dataSource.insertOne(
             buildEntry(
               id: const Uuid().v4(),
               amountMinor: entry.amountMinor,
@@ -328,7 +333,7 @@ void main() {
           );
         }
 
-        final rows = await dataSource.allTransactions.first;
+        final rows = await dataSource.watchAll().first;
         final expected = rows.fold<int>(
           0,
           (sum, t) =>
@@ -338,16 +343,16 @@ void main() {
                   : -t.amountMinor),
         );
 
-        final result = await dataSource.balance.first;
+        final result = await dataSource.watchBalance().first;
         expect(result, expected);
       });
 
       test(
         'emits() an updated total when a row is inserted after subscribing',
         () async {
-          expectLater(dataSource.balance, emitsInOrder([0, 500]));
+          expectLater(dataSource.watchBalance(), emitsInOrder([0, 500]));
           await Future<void>.delayed(Duration.zero);
-          await dataSource.addTransaction(
+          await dataSource.insertOne(
             buildEntry(
               id: const Uuid().v4(),
               amountMinor: 500,
@@ -366,7 +371,7 @@ void main() {
       group('addCategory', () {
         test('basic insert + read-back via watchAllCategories', () async {
           final id = const Uuid().v4();
-          await dataSource.addCategory(
+          await categoriesDao.insertOne(
             buildCategory(
               id: id,
               name: 'Food',
@@ -374,7 +379,7 @@ void main() {
             ),
           );
 
-          final result = await dataSource.watchAllCategories.first;
+          final result = await categoriesDao.watchAll().first;
           final inserted = result.singleWhere((c) => c.id == id);
           expect(inserted.name, 'Food');
           expect(inserted.colorHex, '#FF0000');
@@ -382,24 +387,24 @@ void main() {
 
         test('colorHex omitted -> stored as null', () async {
           final id = const Uuid().v4();
-          await dataSource.addCategory(buildCategory(id: id, name: 'Food'));
+          await categoriesDao.insertOne(buildCategory(id: id, name: 'Food'));
 
-          final result = await dataSource.watchAllCategories.first;
+          final result = await categoriesDao.watchAll().first;
           expect(result.singleWhere((c) => c.id == id).colorHex, null);
         });
 
         test('duplicate id throws; distinct ids both succeed', () async {
           final id = const Uuid().v4();
-          await dataSource.addCategory(buildCategory(id: id));
+          await categoriesDao.insertOne(buildCategory(id: id));
 
           expect(
-            () => dataSource.addCategory(buildCategory(id: id)),
+            () => categoriesDao.insertOne(buildCategory(id: id)),
             throwsA(anything),
           );
 
           final secondId = const Uuid().v4();
-          await dataSource.addCategory(buildCategory(id: secondId));
-          final result = await dataSource.watchAllCategories.first;
+          await categoriesDao.insertOne(buildCategory(id: secondId));
+          final result = await categoriesDao.watchAll().first;
           expect(result.map((c) => c.id), containsAll([id, secondId]));
         });
       });
@@ -407,7 +412,7 @@ void main() {
       group('updateCategory', () {
         test('replaces name and colorHex for a matching id', () async {
           final id = const Uuid().v4();
-          await dataSource.addCategory(
+          await categoriesDao.insertOne(
             buildCategory(
               id: id,
               name: 'Food',
@@ -415,7 +420,7 @@ void main() {
             ),
           );
 
-          await dataSource.updateCategory(
+          await categoriesDao.updateOne(
             CategoriesCompanion(
               id: Value(id),
               name: const Value('Groceries'),
@@ -423,7 +428,7 @@ void main() {
             ),
           );
 
-          final result = await dataSource.watchAllCategories.first;
+          final result = await categoriesDao.watchAll().first;
           final updated = result.singleWhere((c) => c.id == id);
           expect(updated.name, 'Groceries');
           expect(updated.colorHex, '#00FF00');
@@ -431,7 +436,7 @@ void main() {
 
         test('non-existent id -> returns false, no row created', () async {
           final ghostId = const Uuid().v4();
-          final updated = await dataSource.updateCategory(
+          final updated = await categoriesDao.updateOne(
             CategoriesCompanion(
               id: Value(ghostId),
               name: const Value('Ghost'),
@@ -440,7 +445,7 @@ void main() {
           );
 
           expect(updated, isFalse);
-          final result = await dataSource.watchAllCategories.first;
+          final result = await categoriesDao.watchAll().first;
           expect(result.where((c) => c.id == ghostId), isEmpty);
         });
       });
@@ -449,18 +454,18 @@ void main() {
         test('deleting an existing id removes exactly that row', () async {
           final keepId = const Uuid().v4();
           final removeId = const Uuid().v4();
-          await dataSource.addCategory(buildCategory(id: keepId));
-          await dataSource.addCategory(buildCategory(id: removeId));
+          await categoriesDao.insertOne(buildCategory(id: keepId));
+          await categoriesDao.insertOne(buildCategory(id: removeId));
 
-          await dataSource.deleteCategory(removeId);
+          await categoriesDao.deleteById(removeId);
 
-          final result = await dataSource.watchAllCategories.first;
+          final result = await categoriesDao.watchAll().first;
           expect(result.where((c) => c.id == removeId), isEmpty);
           expect(result.where((c) => c.id == keepId).length, 1);
         });
 
         test('deleting a non-existent id returns 0, does not throw', () async {
-          final deletedCount = await dataSource.deleteCategory(
+          final deletedCount = await categoriesDao.deleteById(
             const Uuid().v4(),
           );
           expect(deletedCount, 0);
@@ -472,17 +477,17 @@ void main() {
           () async {
             final categoryId = const Uuid().v4();
             final transactionId = const Uuid().v4();
-            await dataSource.addCategory(buildCategory(id: categoryId));
-            await dataSource.addTransaction(
+            await categoriesDao.insertOne(buildCategory(id: categoryId));
+            await dataSource.insertOne(
               buildEntry(id: transactionId, categoryId: Value(categoryId)),
             );
 
-            await dataSource.deleteCategory(categoryId);
+            await categoriesDao.deleteById(categoryId);
 
-            final categories = await dataSource.watchAllCategories.first;
+            final categories = await categoriesDao.watchAll().first;
             expect(categories.where((c) => c.id == categoryId), isEmpty);
 
-            final transactions = await dataSource.allTransactions.first;
+            final transactions = await dataSource.watchAll().first;
             final orphaned = transactions.singleWhere(
               (t) => t.id == transactionId,
             );
@@ -493,9 +498,9 @@ void main() {
         test('deleting a category with no transactions attached succeeds '
             'immediately (baseline for the orphaning test above)', () async {
           final categoryId = const Uuid().v4();
-          await dataSource.addCategory(buildCategory(id: categoryId));
+          await categoriesDao.insertOne(buildCategory(id: categoryId));
 
-          final deletedCount = await dataSource.deleteCategory(categoryId);
+          final deletedCount = await categoriesDao.deleteById(categoryId);
 
           expect(deletedCount, 1);
         });
@@ -504,11 +509,11 @@ void main() {
       group('findCategoryByName', () {
         test('existing name -> returns the matching row', () async {
           final id = const Uuid().v4();
-          await dataSource.addCategory(
+          await categoriesDao.insertOne(
             buildCategory(id: id, name: 'A Unique Category Name'),
           );
 
-          final result = await dataSource.findCategoryByName(
+          final result = await categoriesDao.findByName(
             'A Unique Category Name',
           );
 
@@ -516,7 +521,7 @@ void main() {
         });
 
         test('no matching name -> returns null', () async {
-          final result = await dataSource.findCategoryByName('Nonexistent');
+          final result = await categoriesDao.findByName('Nonexistent');
           expect(result, null);
         });
       });
@@ -525,7 +530,7 @@ void main() {
         test(
           'a fresh database already contains the 4 seeded default categories',
           () async {
-            final result = await dataSource.watchAllCategories.first;
+            final result = await categoriesDao.watchAll().first;
             expect(result.map((c) => c.id), [
               defaultCategoryFoodId,
               defaultCategoryTransportId,
@@ -540,7 +545,7 @@ void main() {
           () async {
             final id = const Uuid().v4();
             expectLater(
-              dataSource.watchAllCategories,
+              categoriesDao.watchAll(),
               emitsInOrder([
                 predicate<List<Category>>((list) => list.length == 4),
                 predicate<List<Category>>(
@@ -549,7 +554,7 @@ void main() {
               ]),
             );
             await Future<void>.delayed(Duration.zero);
-            await dataSource.addCategory(buildCategory(id: id));
+            await categoriesDao.insertOne(buildCategory(id: id));
           },
         );
       });

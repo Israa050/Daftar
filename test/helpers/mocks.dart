@@ -8,8 +8,10 @@ import 'package:stockflow/core/sync/data/datasources/supabase_sync_data_source.d
 import 'package:stockflow/core/sync/domain/repositories/sync_queue_repository.dart';
 import 'package:stockflow/core/sync/domain/usecases/pull_remote_changes_usecase.dart';
 import 'package:stockflow/core/sync/domain/usecases/push_pending_changes_usecase.dart';
+import 'package:stockflow/core/sync/data/daos/sync_dao.dart';
 import 'package:stockflow/core/sync/domain/usecases/sync_data_usecase.dart';
-import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
+import 'package:stockflow/features/categories/data/daos/categories_dao.dart';
+import 'package:stockflow/features/transactions/data/daos/transactions_dao.dart';
 import 'package:stockflow/features/categories/domain/repositories/category_repository.dart';
 import 'package:stockflow/features/transactions/domain/repositories/transactions_repository.dart';
 import 'package:stockflow/features/categories/domain/usecases/add_category_usecase.dart';
@@ -59,8 +61,11 @@ class MockSyncQueueRepository extends Mock implements SyncQueueRepository {}
 
 class MockSupabaseDataSource extends Mock implements SupabaseSyncDataSource {}
 
-class MockTransactionsDataSource extends Mock
-    implements TransactionsDataSource {}
+class MockTransactionsDao extends Mock implements TransactionsDao {}
+
+class MockCategoriesDao extends Mock implements CategoriesDao {}
+
+class MockSyncDao extends Mock implements SyncDao {}
 
 class MockPushPendingChangesUseCase extends Mock
     implements PushPendingChangesUseCase {}

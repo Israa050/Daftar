@@ -3,27 +3,28 @@ import 'dart:convert';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stockflow/core/result.dart';
+import 'package:stockflow/core/database/app_database.dart';
 import 'package:stockflow/core/sync/data/repos/sync_queue_repository_impl.dart';
 import 'package:stockflow/features/transactions/data/repos/transactions_repository_impl.dart';
-import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
 import 'package:stockflow/features/transactions/domain/entities/transaction_entity.dart';
 import 'package:stockflow/features/transactions/domain/entities/transaction_type.dart';
 import 'package:uuid/uuid.dart';
 
 void main() {
-  late TransactionsDataSource dataSource;
+  late AppDatabase db;
   late TransactionsRepositoryImpl repository;
 
   setUp(() {
-    dataSource = TransactionsDataSource(NativeDatabase.memory());
+    db = AppDatabase(NativeDatabase.memory());
     repository = TransactionsRepositoryImpl(
-      dataSource: dataSource,
-      syncQueueRepository: SyncQueueRepositoryImpl(dataSource: dataSource),
+      db: db,
+      dao: db.transactionsDao,
+      syncQueueRepository: SyncQueueRepositoryImpl(syncDao: db.syncDao),
     );
   });
 
   tearDown(() async {
-    await dataSource.close();
+    await db.close();
   });
 
   group('addTransaction', () {
@@ -106,8 +107,8 @@ void main() {
         amountMinor: 5,
         type: TransactionType.expense,
       );
-      final row = (await dataSource.getAllTransactionsOnce()).single;
-      final queued = (await dataSource.getAllSyncQueueEntries()).single;
+      final row = (await db.transactionsDao.getAllOnce()).single;
+      final queued = (await db.syncDao.getAllQueued()).single;
       final payloadUpdatedAt =
           jsonDecode(queued.payload)['updatedAt'] as String;
 

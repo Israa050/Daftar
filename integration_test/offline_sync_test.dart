@@ -8,7 +8,7 @@ import 'package:stockflow/core/service_locator.dart';
 import 'package:stockflow/core/sync/data/datasources/sync_remote_data_source.dart';
 import 'package:stockflow/core/sync/domain/entities/operation_type.dart';
 import 'package:stockflow/core/sync/presentation/widgets/pending_sync_badge.dart';
-import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
+import 'package:stockflow/core/database/app_database.dart';
 import 'package:stockflow/features/transactions/presentation/screens/transactions_screen.dart';
 import 'package:stockflow/main.dart';
 
@@ -64,7 +64,7 @@ void main() {
   });
 
   tearDown(() async {
-    await getIt<TransactionsDataSource>().close();
+    await getIt<AppDatabase>().close();
     await connectivity.dispose();
     await getIt.reset();
   });

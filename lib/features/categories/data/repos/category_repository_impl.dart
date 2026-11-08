@@ -4,19 +4,26 @@ import 'package:drift/drift.dart';
 import 'package:stockflow/core/result.dart';
 import 'package:stockflow/core/timestamps.dart';
 import 'package:stockflow/core/sync/domain/entities/operation_type.dart';
+import 'package:stockflow/core/database/app_database.dart';
 import 'package:stockflow/core/sync/domain/repositories/sync_queue_repository.dart';
-import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
+import 'package:stockflow/features/categories/data/daos/categories_dao.dart';
+import 'package:stockflow/features/categories/data/dtos/category_total_row.dart';
 import 'package:stockflow/features/categories/domain/entities/category_entity.dart';
 import 'package:stockflow/features/categories/domain/entities/category_total_entity.dart';
 import 'package:stockflow/features/categories/domain/repositories/category_repository.dart';
 import 'package:uuid/uuid.dart';
 
 class CategoryRepositoryImpl extends CategoryRepository {
-  final TransactionsDataSource dataSource;
+  // [db] is held for transaction() -- see TransactionsRepositoryImpl: the
+  // local write and its sync-queue row commit atomically across this DAO and
+  // the sync queue.
+  final AppDatabase db;
+  final CategoriesDao dao;
   final SyncQueueRepository syncQueueRepository;
 
   CategoryRepositoryImpl({
-    required this.dataSource,
+    required this.db,
+    required this.dao,
     required this.syncQueueRepository,
   });
 
@@ -30,20 +37,18 @@ class CategoryRepositoryImpl extends CategoryRepository {
 
   @override
   Stream<List<CategoryEntity>> watchCategories() {
-    return dataSource.watchAllCategories.map(
-      (rows) => rows.map(_toEntity).toList(),
-    );
+    return dao.watchAll().map((rows) => rows.map(_toEntity).toList());
   }
 
   @override
   Future<List<CategoryEntity>> getAllCategoriesOnce() async {
-    final rows = await dataSource.getAllCategoriesOnce();
+    final rows = await dao.getAllOnce();
     return rows.map(_toEntity).toList();
   }
 
   @override
   Stream<List<CategoryTotalEntity>> watchCategoryTotals() {
-    return dataSource.categoryTotals.map(
+    return dao.watchExpenseTotals().map(
       (rows) => rows.map(_toCategoryTotalEntity).toList(),
     );
   }
@@ -89,8 +94,8 @@ class CategoryRepositoryImpl extends CategoryRepository {
     });
 
     try {
-      await dataSource.transaction(() async {
-        await dataSource.addCategory(entry);
+      await db.transaction(() async {
+        await dao.insertOne(entry);
         final queued = await syncQueueRepository.enqueue(
           entityType: 'category',
           entityId: id,
@@ -114,8 +119,8 @@ class CategoryRepositoryImpl extends CategoryRepository {
   @override
   Future<Result<int>> deleteCategory(String id) async {
     try {
-      final result = await dataSource.transaction(() async {
-        final count = await dataSource.deleteCategory(id);
+      final result = await db.transaction(() async {
+        final count = await dao.deleteById(id);
         final queued = await syncQueueRepository.enqueue(
           entityType: 'category',
           entityId: id,
@@ -136,7 +141,7 @@ class CategoryRepositoryImpl extends CategoryRepository {
 
   @override
   Future<CategoryEntity?> getCategoryByName(String name) async {
-    final row = await dataSource.findCategoryByName(name);
+    final row = await dao.findByName(name);
     return row == null ? null : _toEntity(row);
   }
 
@@ -172,8 +177,8 @@ class CategoryRepositoryImpl extends CategoryRepository {
     });
 
     try {
-      await dataSource.transaction(() async {
-        await dataSource.updateCategory(entry);
+      await db.transaction(() async {
+        await dao.updateOne(entry);
         final queued = await syncQueueRepository.enqueue(
           entityType: 'category',
           entityId: id,

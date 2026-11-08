@@ -4,8 +4,8 @@ import 'package:stockflow/core/sync/data/repos/sync_queue_repository_impl.dart';
 import 'package:stockflow/core/sync/domain/repositories/sync_queue_repository.dart';
 import 'package:stockflow/features/transactions/bloc/transactions_bloc.dart';
 import 'package:stockflow/features/categories/data/repos/category_repository_impl.dart';
+import 'package:stockflow/core/database/app_database.dart';
 import 'package:stockflow/features/transactions/data/repos/transactions_repository_impl.dart';
-import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
 import 'package:stockflow/features/transactions/domain/entities/transaction_type.dart';
 import 'package:stockflow/features/categories/domain/repositories/category_repository.dart';
 import 'package:stockflow/features/transactions/domain/repositories/transactions_repository.dart';
@@ -15,7 +15,7 @@ import 'package:stockflow/features/transactions/domain/usecases/get_transactions
 import 'package:stockflow/features/categories/domain/usecases/watch_categories_usecase.dart';
 
 // Not using bloc_test/mocktail here (neither is a dev_dependency yet) --
-// these drive a real in-memory TransactionsDataSource instead, same approach
+// these drive a real in-memory AppDatabase instead, same approach
 // as test/transactions_repository_test.dart. Forcing a repository Failure is
 // only reliable via a duplicate-id insert (see transactions_repository_test's
 // notes on why closing the connection doesn't work), so failure coverage here
@@ -28,7 +28,7 @@ import 'package:stockflow/features/categories/domain/usecases/watch_categories_u
 // push a refreshed Loaded, so those tests must start with AppLaunchEvent.
 
 void main() {
-  late TransactionsDataSource dataSource;
+  late AppDatabase db;
   late SyncQueueRepository syncQueueRepository;
   late TransactionsRepository repository;
   late CategoryRepository categoryRepository;
@@ -39,14 +39,16 @@ void main() {
   late TransactionsBloc bloc;
 
   setUp(() {
-    dataSource = TransactionsDataSource(NativeDatabase.memory());
-    syncQueueRepository = SyncQueueRepositoryImpl(dataSource: dataSource);
+    db = AppDatabase(NativeDatabase.memory());
+    syncQueueRepository = SyncQueueRepositoryImpl(syncDao: db.syncDao);
     repository = TransactionsRepositoryImpl(
-      dataSource: dataSource,
+      db: db,
+      dao: db.transactionsDao,
       syncQueueRepository: syncQueueRepository,
     );
     categoryRepository = CategoryRepositoryImpl(
-      dataSource: dataSource,
+      db: db,
+      dao: db.categoriesDao,
       syncQueueRepository: syncQueueRepository,
     );
     getTransactionsUseCase = GetTransactionsUseCase(repository);
@@ -63,7 +65,7 @@ void main() {
 
   tearDown(() async {
     await bloc.close();
-    await dataSource.close();
+    await db.close();
   });
 
   group('AppLaunchEvent', () {
