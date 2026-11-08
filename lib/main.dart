@@ -8,9 +8,6 @@ import 'package:stockflow/core/service_locator.dart';
 import 'package:stockflow/core/sync/cubit/pending_sync_cubit.dart';
 import 'package:stockflow/core/sync/cubit/sync_cubit.dart';
 import 'package:stockflow/core/theme/app_theme.dart';
-import 'package:stockflow/features/transactions/bloc/balance_cubit.dart';
-import 'package:stockflow/features/categories/bloc/category_totals_cubit.dart';
-import 'package:stockflow/features/transactions/bloc/transactions_bloc.dart';
 import 'package:stockflow/features/transactions/presentation/screens/transactions_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -53,30 +50,31 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
+    // App-wide singletons live ABOVE MaterialApp so pushed routes and modal
+    // sheets -- which mount under the Navigator, as siblings of `home` -- can
+    // still read them. .value (not create): getIt owns these for the app's
+    // lifetime, so BlocProvider must not close them. Screen-scoped blocs
+    // (TransactionsBloc, CategoryTotalsCubit) are provided by their own
+    // screens instead.
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider.value(value: getIt<ConnectivityCubit>()),
+        BlocProvider.value(value: getIt<PendingSyncCubit>()),
+        BlocProvider.value(value: getIt<SyncCubit>()),
       ],
-      supportedLocales: const [Locale('en'), Locale('ar')],
-      debugShowCheckedModeBanner: false,
-      title: 'Daftar',
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
-      themeMode: ThemeMode.system,
-      home: MultiBlocProvider(
-        providers: [
-          // App-wide singletons: one subscription each for the whole app,
-          // so .value (not create) -- BlocProvider must not close them.
-          BlocProvider.value(value: getIt<ConnectivityCubit>()),
-          BlocProvider.value(value: getIt<PendingSyncCubit>()),
-          BlocProvider.value(value: getIt<SyncCubit>()),
-          BlocProvider(create: (_) => getIt<TransactionsBloc>()),
-          BlocProvider(create: (_) => getIt<BalanceCubit>()),
-          BlocProvider(create: (_) => getIt<CategoryTotalsCubit>()),
+      child: MaterialApp(
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
         ],
-        child: const TransactionsScreen(),
+        supportedLocales: const [Locale('en'), Locale('ar')],
+        debugShowCheckedModeBanner: false,
+        title: 'Daftar',
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
+        themeMode: ThemeMode.system,
+        home: const TransactionsScreen(),
       ),
     );
   }

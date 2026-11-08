@@ -89,17 +89,30 @@ void main() {
       initialState: const <CategoryTotalEntity>[],
     );
 
-    return MaterialApp(
-      theme: AppTheme.light(),
-      home: MultiBlocProvider(
-        providers: [
-          BlocProvider<ConnectivityCubit>.value(value: connectivity),
-          BlocProvider<PendingSyncCubit>.value(value: pending),
-          BlocProvider<SyncCubit>.value(value: sync),
-          BlocProvider<CategoryTotalsCubit>.value(value: totals),
-          BlocProvider<TransactionsBloc>.value(value: bloc),
-        ],
-        child: const TransactionsScreen(),
+    // TransactionsScreen resolves these two from getIt itself (as it does in
+    // the real app), so inject the mocks there rather than providing them
+    // above the screen. Factories return the captured instances, so the same
+    // mock bloc is used across rebuilds -- the error test pumps screen() twice
+    // and verifies against `bloc`. Guard the registration: a second screen()
+    // call in the same test would otherwise re-register and throw.
+    if (!getIt.isRegistered<TransactionsBloc>()) {
+      getIt.registerFactory<TransactionsBloc>(() => bloc);
+    }
+    if (!getIt.isRegistered<CategoryTotalsCubit>()) {
+      getIt.registerFactory<CategoryTotalsCubit>(() => totals);
+    }
+
+    // The app-wide cubits live above MaterialApp in the real app; mirror that
+    // so pushed routes and sheets could read them too.
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<ConnectivityCubit>.value(value: connectivity),
+        BlocProvider<PendingSyncCubit>.value(value: pending),
+        BlocProvider<SyncCubit>.value(value: sync),
+      ],
+      child: MaterialApp(
+        theme: AppTheme.light(),
+        home: const TransactionsScreen(),
       ),
     );
   }

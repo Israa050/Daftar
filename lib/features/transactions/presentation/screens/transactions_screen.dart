@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:stockflow/core/connectivity/presentation/widgets/offline_banner.dart';
+import 'package:stockflow/core/service_locator.dart';
 import 'package:stockflow/core/sync/presentation/widgets/pending_sync_badge.dart';
 import 'package:stockflow/features/backup/presentation/widgets/export_action.dart';
+import 'package:stockflow/features/categories/bloc/category_totals_cubit.dart';
 import 'package:stockflow/features/transactions/bloc/transactions_bloc.dart';
 import 'package:stockflow/features/categories/domain/entities/category_entity.dart';
 import 'package:stockflow/features/transactions/domain/entities/transaction_entity.dart';
@@ -16,25 +18,41 @@ import 'package:stockflow/features/transactions/presentation/widgets/undo_snackb
 
 const _undoDuration = Duration(seconds: 5);
 
-class TransactionsScreen extends StatefulWidget {
+class TransactionsScreen extends StatelessWidget {
   const TransactionsScreen({super.key});
 
   @override
-  State<TransactionsScreen> createState() => _TransactionsScreenState();
+  Widget build(BuildContext context) {
+    // This screen owns its blocs. create (not .value): these are getIt
+    // factories scoped to this screen, so BlocProvider should close them on
+    // dispose. AppLaunchEvent is dispatched here in create -- "build the
+    // bloc" and "start the bloc" stay in one place -- instead of in a
+    // separate initState.
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(
+          create: (_) => getIt<TransactionsBloc>()..add(AppLaunchEvent()),
+        ),
+        BlocProvider(create: (_) => getIt<CategoryTotalsCubit>()),
+      ],
+      child: const _TransactionsView(),
+    );
+  }
 }
 
-class _TransactionsScreenState extends State<TransactionsScreen> {
+class _TransactionsView extends StatefulWidget {
+  const _TransactionsView();
+
+  @override
+  State<_TransactionsView> createState() => _TransactionsViewState();
+}
+
+class _TransactionsViewState extends State<_TransactionsView> {
   // Ids that have been swiped away but whose delete is still pending
   // (i.e. the user might still hit Undo). Hiding them locally keeps the
   // rendered list in sync with what Dismissible already removed, instead
   // of waiting on the bloc's async delete + refresh round trip.
   final Set<String> _pendingDeleteIds = {};
-
-  @override
-  void initState() {
-    super.initState();
-    context.read<TransactionsBloc>().add(AppLaunchEvent());
-  }
 
   void _handleSwipeToDelete(TransactionEntity transaction) {
     setState(() => _pendingDeleteIds.add(transaction.id));

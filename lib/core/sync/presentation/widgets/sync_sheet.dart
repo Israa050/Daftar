@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:stockflow/core/connectivity/cubit/connectivity_cubit.dart';
 import 'package:stockflow/core/sync/cubit/pending_sync_cubit.dart';
 import 'package:stockflow/core/sync/cubit/sync_cubit.dart';
 import 'package:stockflow/core/sync/presentation/widgets/sync_now_button.dart';
@@ -9,21 +8,13 @@ import 'package:stockflow/core/theme/app_colors.dart';
 /// Bottom sheet showing how many changes are waiting to sync and a manual
 /// "Sync now" trigger. Opened from [PendingSyncBadge].
 Future<void> showSyncSheet(BuildContext context) {
-  final syncCubit = context.read<SyncCubit>();
-  final pendingSyncCubit = context.read<PendingSyncCubit>();
-  final connectivityCubit = context.read<ConnectivityCubit>();
-
+  // SyncCubit, PendingSyncCubit and ConnectivityCubit are provided above
+  // MaterialApp, so the sheet -- mounted in the Navigator's overlay -- can
+  // read them directly. No need to re-provide them here.
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    builder: (_) => MultiBlocProvider(
-      providers: [
-        BlocProvider.value(value: syncCubit),
-        BlocProvider.value(value: pendingSyncCubit),
-        BlocProvider.value(value: connectivityCubit),
-      ],
-      child: const SyncSheet(),
-    ),
+    builder: (_) => const SyncSheet(),
   );
 }
 
