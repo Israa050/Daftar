@@ -14,7 +14,7 @@ import 'package:stockflow/core/sync/domain/usecases/pull_remote_changes_usecase.
 import 'package:stockflow/core/sync/domain/usecases/push_pending_changes_usecase.dart';
 import 'package:stockflow/core/sync/domain/usecases/sync_data_usecase.dart';
 import 'package:stockflow/features/categories/data/repos/category_repository_impl.dart';
-import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
+import 'package:stockflow/core/database/app_database.dart';
 
 import '../helpers/mocks.dart';
 
@@ -83,7 +83,7 @@ class FakeServer extends Fake implements SyncRemoteDataSource {
 }
 
 void main() {
-  late TransactionsDataSource dataSource;
+  late AppDatabase db;
   late SyncQueueRepositoryImpl syncQueueRepository;
   late CategoryRepositoryImpl categoryRepository;
   late MockSupabaseDataSource remote;
@@ -98,17 +98,20 @@ void main() {
   });
 
   setUp(() async {
-    dataSource = TransactionsDataSource(NativeDatabase.memory());
-    syncQueueRepository = SyncQueueRepositoryImpl(dataSource: dataSource);
+    db = AppDatabase(NativeDatabase.memory());
+    syncQueueRepository = SyncQueueRepositoryImpl(syncDao: db.syncDao);
     categoryRepository = CategoryRepositoryImpl(
-      dataSource: dataSource,
+      db: db,
+      dao: db.categoriesDao,
       syncQueueRepository: syncQueueRepository,
     );
     remote = MockSupabaseDataSource();
     syncRepository = SyncRepositoryImpl(
       syncQueueRepository: syncQueueRepository,
       remoteDataSource: remote,
-      dataSource: dataSource,
+      transactionsDao: db.transactionsDao,
+      categoriesDao: db.categoriesDao,
+      syncDao: db.syncDao,
     );
 
     // The offline local edit: add, then rename. Both writes are queued.
@@ -116,14 +119,14 @@ void main() {
     categoryId = (await categoryRepository.getCategoryByName('Groceries'))!.id;
     await categoryRepository.updateCategory(id: categoryId, name: 'Local Edit');
 
-    final row = (await dataSource.getAllCategoriesOnce()).singleWhere(
+    final row = (await db.categoriesDao.getAllOnce()).singleWhere(
       (c) => c.id == categoryId,
     );
     localEditTime = row.updatedAt.toUtc();
   });
 
   tearDown(() async {
-    await dataSource.close();
+    await db.close();
   });
 
   /// The other device edited the same category at [remoteUpdatedAt].
@@ -155,7 +158,7 @@ void main() {
 
   /// The queued update for the local edit, if it is still pending.
   Future<bool> localEditStillQueued() async {
-    final entries = await dataSource.getAllSyncQueueEntries();
+    final entries = await db.syncDao.getAllQueued();
     return entries.any(
       (e) => e.entityId == categoryId && e.operation == OperationType.update,
     );
@@ -164,7 +167,7 @@ void main() {
   /// The category as stored locally. Read by id (not by name) so a wrong
   /// winner fails with the actual name instead of a null crash.
   Future<Category> storedCategory() async {
-    final row = await dataSource.findCategoryById(categoryId);
+    final row = await db.categoriesDao.findById(categoryId);
     return row!;
   }
 
@@ -253,7 +256,9 @@ void main() {
     final repo = SyncRepositoryImpl(
       syncQueueRepository: syncQueueRepository,
       remoteDataSource: server,
-      dataSource: dataSource,
+      transactionsDao: db.transactionsDao,
+      categoriesDao: db.categoriesDao,
+      syncDao: db.syncDao,
     );
     final sync = SyncDataUseCase(
       pushPendingChangesUseCase: PushPendingChangesUseCase(repo),
@@ -272,7 +277,7 @@ void main() {
     expect(stored.name, 'Remote Edit');
     expect(stored.updatedAt.toUtc(), later());
     expect(
-      await dataSource.getAllSyncQueueEntries(),
+      await db.syncDao.getAllQueued(),
       isEmpty,
       reason: 'a rejected stale write still counts as pushed and is dequeued',
     );

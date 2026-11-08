@@ -26,12 +26,15 @@ import 'package:stockflow/features/backup/domain/usecases/export_data_usecase.da
 import 'package:stockflow/features/categories/bloc/categories_bloc.dart';
 import 'package:stockflow/features/categories/bloc/category_totals_cubit.dart';
 import 'package:stockflow/features/transactions/bloc/transactions_bloc.dart';
-import 'package:stockflow/features/transactions/data/connection.dart';
+import 'package:stockflow/core/database/app_database.dart';
+import 'package:stockflow/core/database/connection.dart';
+import 'package:stockflow/core/sync/data/daos/sync_dao.dart';
+import 'package:stockflow/features/categories/data/daos/categories_dao.dart';
+import 'package:stockflow/features/transactions/data/daos/transactions_dao.dart';
 import 'package:stockflow/features/categories/data/repos/categories_export_source.dart';
 import 'package:stockflow/features/categories/data/repos/category_repository_impl.dart';
 import 'package:stockflow/features/transactions/data/repos/transactions_export_source.dart';
 import 'package:stockflow/features/transactions/data/repos/transactions_repository_impl.dart';
-import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
 import 'package:stockflow/features/categories/domain/repositories/category_repository.dart';
 import 'package:stockflow/features/transactions/domain/repositories/transactions_repository.dart';
 import 'package:stockflow/features/categories/domain/usecases/add_category_usecase.dart';
@@ -70,12 +73,22 @@ void setupServiceLocator({QueryExecutor? database}) {
     ),
   );
 
-  getIt.registerLazySingleton<TransactionsDataSource>(
-    () => TransactionsDataSource(database ?? openTransactionsConnection()),
+  getIt.registerLazySingleton<AppDatabase>(
+    () => AppDatabase(database ?? openAppDatabaseConnection()),
   );
 
+  // DAOs are getters on the database; register each so repositories depend on
+  // just the one(s) they need rather than the whole database surface.
+  getIt.registerLazySingleton<TransactionsDao>(
+    () => getIt<AppDatabase>().transactionsDao,
+  );
+  getIt.registerLazySingleton<CategoriesDao>(
+    () => getIt<AppDatabase>().categoriesDao,
+  );
+  getIt.registerLazySingleton<SyncDao>(() => getIt<AppDatabase>().syncDao);
+
   getIt.registerLazySingleton<SyncQueueRepository>(
-    () => SyncQueueRepositoryImpl(dataSource: getIt<TransactionsDataSource>()),
+    () => SyncQueueRepositoryImpl(syncDao: getIt<SyncDao>()),
   );
 
   getIt.registerLazySingleton<WatchPendingSyncCountUseCase>(
@@ -91,7 +104,9 @@ void setupServiceLocator({QueryExecutor? database}) {
     () => SyncRepositoryImpl(
       syncQueueRepository: getIt<SyncQueueRepository>(),
       remoteDataSource: getIt<SyncRemoteDataSource>(),
-      dataSource: getIt<TransactionsDataSource>(),
+      transactionsDao: getIt<TransactionsDao>(),
+      categoriesDao: getIt<CategoriesDao>(),
+      syncDao: getIt<SyncDao>(),
     ),
   );
 
@@ -130,14 +145,16 @@ void setupServiceLocator({QueryExecutor? database}) {
 
   getIt.registerLazySingleton<TransactionsRepository>(
     () => TransactionsRepositoryImpl(
-      dataSource: getIt<TransactionsDataSource>(),
+      db: getIt<AppDatabase>(),
+      dao: getIt<TransactionsDao>(),
       syncQueueRepository: getIt<SyncQueueRepository>(),
     ),
   );
 
   getIt.registerLazySingleton<CategoryRepository>(
     () => CategoryRepositoryImpl(
-      dataSource: getIt<TransactionsDataSource>(),
+      db: getIt<AppDatabase>(),
+      dao: getIt<CategoriesDao>(),
       syncQueueRepository: getIt<SyncQueueRepository>(),
     ),
   );
@@ -224,7 +241,7 @@ void setupServiceLocator({QueryExecutor? database}) {
         getIt<ExportableSource>(instanceName: 'categoriesExportSource'),
       ],
       appVersion: appVersion,
-      schemaVersion: getIt<TransactionsDataSource>().schemaVersion,
+      schemaVersion: getIt<AppDatabase>().schemaVersion,
     ),
   );
 

@@ -1,14 +1,15 @@
 import 'package:stockflow/core/result.dart';
 import 'package:stockflow/core/sync/domain/entities/operation_type.dart';
 import 'package:stockflow/core/sync/domain/entities/sync_queue_entry_entity.dart';
+import 'package:stockflow/core/database/app_database.dart';
+import 'package:stockflow/core/sync/data/daos/sync_dao.dart';
 import 'package:stockflow/core/sync/domain/repositories/sync_queue_repository.dart';
-import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
 import 'package:uuid/uuid.dart';
 
 class SyncQueueRepositoryImpl extends SyncQueueRepository {
-  final TransactionsDataSource dataSource;
+  final SyncDao syncDao;
 
-  SyncQueueRepositoryImpl({required this.dataSource});
+  SyncQueueRepositoryImpl({required this.syncDao});
 
   SyncQueueEntryEntity _toEntity(SyncQueueEntry entry) {
     return SyncQueueEntryEntity(
@@ -36,7 +37,7 @@ class SyncQueueRepositoryImpl extends SyncQueueRepository {
       payload: payload,
     );
     try {
-      final result = await dataSource.addSyncQueueEntry(entry);
+      final result = await syncDao.enqueue(entry);
       return Success(result);
     } catch (e) {
       return Failure(e.toString());
@@ -45,13 +46,13 @@ class SyncQueueRepositoryImpl extends SyncQueueRepository {
 
   @override
   Stream<int> watchPendingCount() {
-    return dataSource.pendingSyncCount;
+    return syncDao.watchPendingCount();
   }
 
   @override
   Future<Result<void>> dequeue(String id) async {
     try {
-      await dataSource.deleteSyncQueueEntry(id);
+      await syncDao.deleteQueued(id);
       return const Success(null);
     } catch (e) {
       return Failure(e.toString());
@@ -61,7 +62,7 @@ class SyncQueueRepositoryImpl extends SyncQueueRepository {
   @override
   Future<Result<List<SyncQueueEntryEntity>>> getPending() async {
     try {
-      final result = await dataSource.getAllSyncQueueEntries();
+      final result = await syncDao.getAllQueued();
       return Success(result.map(_toEntity).toList());
     } catch (e) {
       return Failure(e.toString());

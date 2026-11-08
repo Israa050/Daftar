@@ -26,7 +26,7 @@ import 'package:stockflow/features/categories/data/repos/categories_export_sourc
 import 'package:stockflow/features/categories/data/repos/category_repository_impl.dart';
 import 'package:stockflow/features/transactions/data/repos/transactions_export_source.dart';
 import 'package:stockflow/features/transactions/data/repos/transactions_repository_impl.dart';
-import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
+import 'package:stockflow/core/database/app_database.dart';
 import 'package:stockflow/features/categories/domain/repositories/category_repository.dart';
 import 'package:stockflow/features/transactions/domain/repositories/transactions_repository.dart';
 import 'package:stockflow/features/transactions/domain/usecases/add_transaction_usecase.dart';
@@ -67,8 +67,8 @@ void main() {
     // setupServiceLocator()'s real disk-backed connection, so this test
     // doesn't touch path_provider/disk I/O and every resource can be
     // closed deterministically in tearDown below.
-    final dataSource = TransactionsDataSource(NativeDatabase.memory());
-    getIt.registerSingleton<TransactionsDataSource>(dataSource);
+    final db = AppDatabase(NativeDatabase.memory());
+    getIt.registerSingleton<AppDatabase>(db);
     getIt.registerSingleton<ConnectivityCubit>(
       ConnectivityCubit(
         watchConnectivityUseCase: _StubWatchConnectivityUseCase(),
@@ -87,17 +87,19 @@ void main() {
       ),
     );
     getIt.registerSingleton<SyncQueueRepository>(
-      SyncQueueRepositoryImpl(dataSource: dataSource),
+      SyncQueueRepositoryImpl(syncDao: db.syncDao),
     );
     getIt.registerSingleton<TransactionsRepository>(
       TransactionsRepositoryImpl(
-        dataSource: dataSource,
+        db: db,
+        dao: db.transactionsDao,
         syncQueueRepository: getIt<SyncQueueRepository>(),
       ),
     );
     getIt.registerSingleton<CategoryRepository>(
       CategoryRepositoryImpl(
-        dataSource: dataSource,
+        db: db,
+        dao: db.categoriesDao,
         syncQueueRepository: getIt<SyncQueueRepository>(),
       ),
     );
@@ -151,7 +153,7 @@ void main() {
           getIt<ExportableSource>(instanceName: 'categoriesExportSource'),
         ],
         appVersion: appVersion,
-        schemaVersion: getIt<TransactionsDataSource>().schemaVersion,
+        schemaVersion: getIt<AppDatabase>().schemaVersion,
       ),
     );
     getIt.registerSingleton<ExportDataUseCase>(
@@ -163,7 +165,7 @@ void main() {
 
     addTearDown(() async {
       await getIt.reset();
-      await dataSource.close();
+      await db.close();
     });
 
     await tester.pumpWidget(const MyApp());

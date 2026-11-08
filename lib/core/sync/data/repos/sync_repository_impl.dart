@@ -1,10 +1,13 @@
 import 'package:drift/drift.dart';
 import 'package:logger/logger.dart';
 import 'package:stockflow/core/result.dart';
+import 'package:stockflow/core/database/app_database.dart';
+import 'package:stockflow/core/sync/data/daos/sync_dao.dart';
 import 'package:stockflow/core/sync/data/datasources/sync_remote_data_source.dart';
 import 'package:stockflow/core/sync/domain/repositories/sync_queue_repository.dart';
 import 'package:stockflow/core/sync/domain/repositories/sync_repository.dart';
-import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
+import 'package:stockflow/features/categories/data/daos/categories_dao.dart';
+import 'package:stockflow/features/transactions/data/daos/transactions_dao.dart';
 import 'package:stockflow/features/transactions/domain/entities/transaction_type.dart';
 
 final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
@@ -13,12 +16,18 @@ class SyncRepositoryImpl implements SyncRepository {
   SyncRepositoryImpl({
     required this.syncQueueRepository,
     required this.remoteDataSource,
-    required this.dataSource,
+    required this.transactionsDao,
+    required this.categoriesDao,
+    required this.syncDao,
   });
 
   final SyncQueueRepository syncQueueRepository;
   final SyncRemoteDataSource remoteDataSource;
-  final TransactionsDataSource dataSource;
+  // Pull applies remote rows to both tables and tracks per-type watermarks,
+  // so this repo legitimately touches all three DAOs.
+  final TransactionsDao transactionsDao;
+  final CategoriesDao categoriesDao;
+  final SyncDao syncDao;
 
   // Categories first: transactions.category_id has an FK to categories.
   static const _entityTypes = ['category', 'transaction'];
@@ -94,8 +103,7 @@ class SyncRepositoryImpl implements SyncRepository {
 
   Future<int> _pullEntityType(String entityType) async {
     final key = _watermarkKey(entityType);
-    final lastPulledAt =
-        await dataSource.getSyncMeta(key) ?? DateTime.utc(1970);
+    final lastPulledAt = await syncDao.getMeta(key) ?? DateTime.utc(1970);
     // Captured before querying, not after applying, so a row that changes
     // remotely while this pull is in flight is picked up again next time
     // instead of being skipped.
@@ -116,7 +124,7 @@ class SyncRepositoryImpl implements SyncRepository {
       if (wasApplied) applied++;
     }
 
-    await dataSource.setSyncMeta(key, pullStartedAt);
+    await syncDao.setMeta(key, pullStartedAt);
     return applied;
   }
 
@@ -126,12 +134,12 @@ class SyncRepositoryImpl implements SyncRepository {
     final id = row['id'] as String;
     final remoteUpdatedAt = DateTime.parse(row['updated_at'] as String);
 
-    final local = await dataSource.findTransactionById(id);
+    final local = await transactionsDao.findById(id);
     if (local != null && !remoteUpdatedAt.isAfter(local.updatedAt)) {
       return false;
     }
 
-    await dataSource.upsertTransaction(
+    await transactionsDao.upsert(
       TransactionsCompanion.insert(
         id: id,
         amountMinor: row['amount_minor'] as int,
@@ -152,12 +160,12 @@ class SyncRepositoryImpl implements SyncRepository {
     final id = row['id'] as String;
     final remoteUpdatedAt = DateTime.parse(row['updated_at'] as String);
 
-    final local = await dataSource.findCategoryById(id);
+    final local = await categoriesDao.findById(id);
     if (local != null && !remoteUpdatedAt.isAfter(local.updatedAt)) {
       return false;
     }
 
-    await dataSource.upsertCategory(
+    await categoriesDao.upsert(
       CategoriesCompanion.insert(
         id: id,
         name: row['name'] as String,

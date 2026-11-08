@@ -4,8 +4,8 @@ import 'package:stockflow/core/service_locator.dart';
 import 'package:stockflow/core/sync/data/datasources/sync_remote_data_source.dart';
 import 'package:stockflow/core/sync/data/repos/sync_repository_impl.dart';
 import 'package:stockflow/core/sync/domain/entities/sync_queue_entry_entity.dart';
+import 'package:stockflow/core/database/app_database.dart';
 import 'package:stockflow/core/sync/domain/repositories/sync_repository.dart';
-import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
 
 class _InMemoryRemote implements SyncRemoteDataSource {
   final pushed = <SyncQueueEntryEntity>[];
@@ -22,7 +22,7 @@ class _InMemoryRemote implements SyncRemoteDataSource {
 
 void main() {
   tearDown(() async {
-    await getIt<TransactionsDataSource>().close();
+    await getIt<AppDatabase>().close();
     await getIt.reset();
   });
 

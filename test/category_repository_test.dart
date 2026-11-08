@@ -6,9 +6,9 @@ import 'package:stockflow/core/result.dart';
 import 'package:stockflow/core/sync/domain/entities/operation_type.dart';
 import 'package:stockflow/core/sync/data/repos/sync_queue_repository_impl.dart';
 import 'package:stockflow/core/sync/domain/repositories/sync_queue_repository.dart';
+import 'package:stockflow/core/database/app_database.dart';
 import 'package:stockflow/features/categories/data/repos/category_repository_impl.dart';
 import 'package:stockflow/features/transactions/data/repos/transactions_repository_impl.dart';
-import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
 import 'package:stockflow/features/transactions/domain/entities/transaction_type.dart';
 import 'package:uuid/uuid.dart';
 
@@ -17,26 +17,28 @@ import 'package:uuid/uuid.dart';
 // transactions, which starts empty) -- assertions filter to the category
 // created within the test rather than assuming an empty table.
 void main() {
-  late TransactionsDataSource dataSource;
+  late AppDatabase db;
   late SyncQueueRepository syncQueueRepository;
   late CategoryRepositoryImpl repository;
   late TransactionsRepositoryImpl transactionsRepository;
 
   setUp(() {
-    dataSource = TransactionsDataSource(NativeDatabase.memory());
-    syncQueueRepository = SyncQueueRepositoryImpl(dataSource: dataSource);
+    db = AppDatabase(NativeDatabase.memory());
+    syncQueueRepository = SyncQueueRepositoryImpl(syncDao: db.syncDao);
     repository = CategoryRepositoryImpl(
-      dataSource: dataSource,
+      db: db,
+      dao: db.categoriesDao,
       syncQueueRepository: syncQueueRepository,
     );
     transactionsRepository = TransactionsRepositoryImpl(
-      dataSource: dataSource,
+      db: db,
+      dao: db.transactionsDao,
       syncQueueRepository: syncQueueRepository,
     );
   });
 
   tearDown(() async {
-    await dataSource.close();
+    await db.close();
   });
 
   group('addCategory', () {
@@ -112,10 +114,10 @@ void main() {
         'instant.', () async {
       await repository.addCategory(name: 'Groceries');
 
-      final row = (await dataSource.getAllCategoriesOnce()).singleWhere(
+      final row = (await db.categoriesDao.getAllOnce()).singleWhere(
         (c) => c.name == 'Groceries',
       );
-      final queued = (await dataSource.getAllSyncQueueEntries()).singleWhere(
+      final queued = (await db.syncDao.getAllQueued()).singleWhere(
         (e) => e.entityId == row.id,
       );
       final payloadUpdatedAt =
@@ -139,10 +141,10 @@ void main() {
 
       await repository.updateCategory(id: id, name: 'Snacks');
 
-      final row = (await dataSource.getAllCategoriesOnce()).singleWhere(
+      final row = (await db.categoriesDao.getAllOnce()).singleWhere(
         (c) => c.id == id,
       );
-      final queued = (await dataSource.getAllSyncQueueEntries()).singleWhere(
+      final queued = (await db.syncDao.getAllQueued()).singleWhere(
         (e) => e.entityId == id && e.operation == OperationType.update,
       );
       final payloadUpdatedAt =

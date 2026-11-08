@@ -2,20 +2,20 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stockflow/core/result.dart';
 import 'package:stockflow/core/sync/data/repos/sync_queue_repository_impl.dart';
+import 'package:stockflow/core/database/app_database.dart';
 import 'package:stockflow/core/sync/domain/entities/operation_type.dart';
-import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
 
 void main() {
-  late TransactionsDataSource dataSource;
+  late AppDatabase db;
   late SyncQueueRepositoryImpl repository;
 
   setUp(() {
-    dataSource = TransactionsDataSource(NativeDatabase.memory());
-    repository = SyncQueueRepositoryImpl(dataSource: dataSource);
+    db = AppDatabase(NativeDatabase.memory());
+    repository = SyncQueueRepositoryImpl(syncDao: db.syncDao);
   });
 
   tearDown(() async {
-    await dataSource.close();
+    await db.close();
   });
 
   Future<Result<int>> enqueueOne({
@@ -32,11 +32,7 @@ void main() {
     );
   }
 
-  // Reads the raw queue rows straight off the generated table -- the data
-  // source exposes no read method for the sync queue (only a count stream).
-  Future<List<SyncQueueEntry>> queueRows() {
-    return dataSource.select(dataSource.syncQueueEntries).get();
-  }
+  Future<List<SyncQueueEntry>> queueRows() => db.syncDao.getAllQueued();
 
   group('enqueue', () {
     test(

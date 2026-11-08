@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'transactions_data_source.dart';
+part of 'app_database.dart';
 
 // ignore_for_file: type=lint
 class $CategoriesTable extends Categories
@@ -1492,16 +1492,20 @@ class SyncMetaCompanion extends UpdateCompanion<SyncMetaData> {
   }
 }
 
-abstract class _$TransactionsDataSource extends GeneratedDatabase {
-  _$TransactionsDataSource(QueryExecutor e) : super(e);
-  $TransactionsDataSourceManager get managers =>
-      $TransactionsDataSourceManager(this);
+abstract class _$AppDatabase extends GeneratedDatabase {
+  _$AppDatabase(QueryExecutor e) : super(e);
+  $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $CategoriesTable categories = $CategoriesTable(this);
   late final $TransactionsTable transactions = $TransactionsTable(this);
   late final $SyncQueueEntriesTable syncQueueEntries = $SyncQueueEntriesTable(
     this,
   );
   late final $SyncMetaTable syncMeta = $SyncMetaTable(this);
+  late final TransactionsDao transactionsDao = TransactionsDao(
+    this as AppDatabase,
+  );
+  late final CategoriesDao categoriesDao = CategoriesDao(this as AppDatabase);
+  late final SyncDao syncDao = SyncDao(this as AppDatabase);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1542,16 +1546,14 @@ typedef $$CategoriesTableUpdateCompanionBuilder =
     });
 
 final class $$CategoriesTableReferences
-    extends
-        BaseReferences<_$TransactionsDataSource, $CategoriesTable, Category> {
+    extends BaseReferences<_$AppDatabase, $CategoriesTable, Category> {
   $$CategoriesTableReferences(super.$_db, super.$_table, super.$_typedResult);
 
   static MultiTypedResultKey<$TransactionsTable, List<Transaction>>
-  _transactionsRefsTable(_$TransactionsDataSource db) =>
-      MultiTypedResultKey.fromTable(
-        db.transactions,
-        aliasName: 'categories__id__transactions__category_id',
-      );
+  _transactionsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.transactions,
+    aliasName: 'categories__id__transactions__category_id',
+  );
 
   $$TransactionsTableProcessedTableManager get transactionsRefs {
     final manager = $$TransactionsTableTableManager(
@@ -1567,7 +1569,7 @@ final class $$CategoriesTableReferences
 }
 
 class $$CategoriesTableFilterComposer
-    extends Composer<_$TransactionsDataSource, $CategoriesTable> {
+    extends Composer<_$AppDatabase, $CategoriesTable> {
   $$CategoriesTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -1622,7 +1624,7 @@ class $$CategoriesTableFilterComposer
 }
 
 class $$CategoriesTableOrderingComposer
-    extends Composer<_$TransactionsDataSource, $CategoriesTable> {
+    extends Composer<_$AppDatabase, $CategoriesTable> {
   $$CategoriesTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -1652,7 +1654,7 @@ class $$CategoriesTableOrderingComposer
 }
 
 class $$CategoriesTableAnnotationComposer
-    extends Composer<_$TransactionsDataSource, $CategoriesTable> {
+    extends Composer<_$AppDatabase, $CategoriesTable> {
   $$CategoriesTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -1701,7 +1703,7 @@ class $$CategoriesTableAnnotationComposer
 class $$CategoriesTableTableManager
     extends
         RootTableManager<
-          _$TransactionsDataSource,
+          _$AppDatabase,
           $CategoriesTable,
           Category,
           $$CategoriesTableFilterComposer,
@@ -1713,10 +1715,8 @@ class $$CategoriesTableTableManager
           Category,
           PrefetchHooks Function({bool transactionsRefs})
         > {
-  $$CategoriesTableTableManager(
-    _$TransactionsDataSource db,
-    $CategoriesTable table,
-  ) : super(
+  $$CategoriesTableTableManager(_$AppDatabase db, $CategoriesTable table)
+    : super(
         TableManagerState(
           db: db,
           table: table,
@@ -1798,7 +1798,7 @@ class $$CategoriesTableTableManager
 
 typedef $$CategoriesTableProcessedTableManager =
     ProcessedTableManager<
-      _$TransactionsDataSource,
+      _$AppDatabase,
       $CategoriesTable,
       Category,
       $$CategoriesTableFilterComposer,
@@ -1836,15 +1836,10 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
     });
 
 final class $$TransactionsTableReferences
-    extends
-        BaseReferences<
-          _$TransactionsDataSource,
-          $TransactionsTable,
-          Transaction
-        > {
+    extends BaseReferences<_$AppDatabase, $TransactionsTable, Transaction> {
   $$TransactionsTableReferences(super.$_db, super.$_table, super.$_typedResult);
 
-  static $CategoriesTable _categoryIdTable(_$TransactionsDataSource db) =>
+  static $CategoriesTable _categoryIdTable(_$AppDatabase db) =>
       db.categories.createAlias('transactions__category_id__categories__id');
 
   $$CategoriesTableProcessedTableManager? get categoryId {
@@ -1863,7 +1858,7 @@ final class $$TransactionsTableReferences
 }
 
 class $$TransactionsTableFilterComposer
-    extends Composer<_$TransactionsDataSource, $TransactionsTable> {
+    extends Composer<_$AppDatabase, $TransactionsTable> {
   $$TransactionsTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -1932,7 +1927,7 @@ class $$TransactionsTableFilterComposer
 }
 
 class $$TransactionsTableOrderingComposer
-    extends Composer<_$TransactionsDataSource, $TransactionsTable> {
+    extends Composer<_$AppDatabase, $TransactionsTable> {
   $$TransactionsTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -2000,7 +1995,7 @@ class $$TransactionsTableOrderingComposer
 }
 
 class $$TransactionsTableAnnotationComposer
-    extends Composer<_$TransactionsDataSource, $TransactionsTable> {
+    extends Composer<_$AppDatabase, $TransactionsTable> {
   $$TransactionsTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -2062,7 +2057,7 @@ class $$TransactionsTableAnnotationComposer
 class $$TransactionsTableTableManager
     extends
         RootTableManager<
-          _$TransactionsDataSource,
+          _$AppDatabase,
           $TransactionsTable,
           Transaction,
           $$TransactionsTableFilterComposer,
@@ -2074,10 +2069,8 @@ class $$TransactionsTableTableManager
           Transaction,
           PrefetchHooks Function({bool categoryId})
         > {
-  $$TransactionsTableTableManager(
-    _$TransactionsDataSource db,
-    $TransactionsTable table,
-  ) : super(
+  $$TransactionsTableTableManager(_$AppDatabase db, $TransactionsTable table)
+    : super(
         TableManagerState(
           db: db,
           table: table,
@@ -2186,7 +2179,7 @@ class $$TransactionsTableTableManager
 
 typedef $$TransactionsTableProcessedTableManager =
     ProcessedTableManager<
-      _$TransactionsDataSource,
+      _$AppDatabase,
       $TransactionsTable,
       Transaction,
       $$TransactionsTableFilterComposer,
@@ -2220,7 +2213,7 @@ typedef $$SyncQueueEntriesTableUpdateCompanionBuilder =
     });
 
 class $$SyncQueueEntriesTableFilterComposer
-    extends Composer<_$TransactionsDataSource, $SyncQueueEntriesTable> {
+    extends Composer<_$AppDatabase, $SyncQueueEntriesTable> {
   $$SyncQueueEntriesTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -2261,7 +2254,7 @@ class $$SyncQueueEntriesTableFilterComposer
 }
 
 class $$SyncQueueEntriesTableOrderingComposer
-    extends Composer<_$TransactionsDataSource, $SyncQueueEntriesTable> {
+    extends Composer<_$AppDatabase, $SyncQueueEntriesTable> {
   $$SyncQueueEntriesTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -2301,7 +2294,7 @@ class $$SyncQueueEntriesTableOrderingComposer
 }
 
 class $$SyncQueueEntriesTableAnnotationComposer
-    extends Composer<_$TransactionsDataSource, $SyncQueueEntriesTable> {
+    extends Composer<_$AppDatabase, $SyncQueueEntriesTable> {
   $$SyncQueueEntriesTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -2333,7 +2326,7 @@ class $$SyncQueueEntriesTableAnnotationComposer
 class $$SyncQueueEntriesTableTableManager
     extends
         RootTableManager<
-          _$TransactionsDataSource,
+          _$AppDatabase,
           $SyncQueueEntriesTable,
           SyncQueueEntry,
           $$SyncQueueEntriesTableFilterComposer,
@@ -2344,7 +2337,7 @@ class $$SyncQueueEntriesTableTableManager
           (
             SyncQueueEntry,
             BaseReferences<
-              _$TransactionsDataSource,
+              _$AppDatabase,
               $SyncQueueEntriesTable,
               SyncQueueEntry
             >,
@@ -2353,7 +2346,7 @@ class $$SyncQueueEntriesTableTableManager
           PrefetchHooks Function()
         > {
   $$SyncQueueEntriesTableTableManager(
-    _$TransactionsDataSource db,
+    _$AppDatabase db,
     $SyncQueueEntriesTable table,
   ) : super(
         TableManagerState(
@@ -2411,7 +2404,7 @@ class $$SyncQueueEntriesTableTableManager
 
 typedef $$SyncQueueEntriesTableProcessedTableManager =
     ProcessedTableManager<
-      _$TransactionsDataSource,
+      _$AppDatabase,
       $SyncQueueEntriesTable,
       SyncQueueEntry,
       $$SyncQueueEntriesTableFilterComposer,
@@ -2421,11 +2414,7 @@ typedef $$SyncQueueEntriesTableProcessedTableManager =
       $$SyncQueueEntriesTableUpdateCompanionBuilder,
       (
         SyncQueueEntry,
-        BaseReferences<
-          _$TransactionsDataSource,
-          $SyncQueueEntriesTable,
-          SyncQueueEntry
-        >,
+        BaseReferences<_$AppDatabase, $SyncQueueEntriesTable, SyncQueueEntry>,
       ),
       SyncQueueEntry,
       PrefetchHooks Function()
@@ -2444,7 +2433,7 @@ typedef $$SyncMetaTableUpdateCompanionBuilder =
     });
 
 class $$SyncMetaTableFilterComposer
-    extends Composer<_$TransactionsDataSource, $SyncMetaTable> {
+    extends Composer<_$AppDatabase, $SyncMetaTable> {
   $$SyncMetaTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -2464,7 +2453,7 @@ class $$SyncMetaTableFilterComposer
 }
 
 class $$SyncMetaTableOrderingComposer
-    extends Composer<_$TransactionsDataSource, $SyncMetaTable> {
+    extends Composer<_$AppDatabase, $SyncMetaTable> {
   $$SyncMetaTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -2484,7 +2473,7 @@ class $$SyncMetaTableOrderingComposer
 }
 
 class $$SyncMetaTableAnnotationComposer
-    extends Composer<_$TransactionsDataSource, $SyncMetaTable> {
+    extends Composer<_$AppDatabase, $SyncMetaTable> {
   $$SyncMetaTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -2502,7 +2491,7 @@ class $$SyncMetaTableAnnotationComposer
 class $$SyncMetaTableTableManager
     extends
         RootTableManager<
-          _$TransactionsDataSource,
+          _$AppDatabase,
           $SyncMetaTable,
           SyncMetaData,
           $$SyncMetaTableFilterComposer,
@@ -2512,16 +2501,12 @@ class $$SyncMetaTableTableManager
           $$SyncMetaTableUpdateCompanionBuilder,
           (
             SyncMetaData,
-            BaseReferences<
-              _$TransactionsDataSource,
-              $SyncMetaTable,
-              SyncMetaData
-            >,
+            BaseReferences<_$AppDatabase, $SyncMetaTable, SyncMetaData>,
           ),
           SyncMetaData,
           PrefetchHooks Function()
         > {
-  $$SyncMetaTableTableManager(_$TransactionsDataSource db, $SyncMetaTable table)
+  $$SyncMetaTableTableManager(_$AppDatabase db, $SyncMetaTable table)
     : super(
         TableManagerState(
           db: db,
@@ -2558,7 +2543,7 @@ class $$SyncMetaTableTableManager
 
 typedef $$SyncMetaTableProcessedTableManager =
     ProcessedTableManager<
-      _$TransactionsDataSource,
+      _$AppDatabase,
       $SyncMetaTable,
       SyncMetaData,
       $$SyncMetaTableFilterComposer,
@@ -2568,15 +2553,15 @@ typedef $$SyncMetaTableProcessedTableManager =
       $$SyncMetaTableUpdateCompanionBuilder,
       (
         SyncMetaData,
-        BaseReferences<_$TransactionsDataSource, $SyncMetaTable, SyncMetaData>,
+        BaseReferences<_$AppDatabase, $SyncMetaTable, SyncMetaData>,
       ),
       SyncMetaData,
       PrefetchHooks Function()
     >;
 
-class $TransactionsDataSourceManager {
-  final _$TransactionsDataSource _db;
-  $TransactionsDataSourceManager(this._db);
+class $AppDatabaseManager {
+  final _$AppDatabase _db;
+  $AppDatabaseManager(this._db);
   $$CategoriesTableTableManager get categories =>
       $$CategoriesTableTableManager(_db, _db.categories);
   $$TransactionsTableTableManager get transactions =>

@@ -7,27 +7,27 @@ import 'package:stockflow/core/sync/data/datasources/supabase_sync_data_source.d
 import 'package:stockflow/core/sync/data/repos/sync_queue_repository_impl.dart';
 import 'package:stockflow/core/sync/data/repos/sync_repository_impl.dart';
 
-import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
+import 'package:stockflow/core/database/app_database.dart';
 import 'package:stockflow/features/transactions/domain/entities/transaction_type.dart';
 
 import '../helpers/mocks.dart';
 
 void main() {
-  late TransactionsDataSource transactionsDataSource;
+  late AppDatabase db;
   late SupabaseSyncDataSource supabaseSyncDataSource;
   late SyncRepositoryImpl syncRepositoryImpl;
   late SyncQueueRepositoryImpl syncQueueRepository;
 
   setUp(() {
-    transactionsDataSource = TransactionsDataSource(NativeDatabase.memory());
+    db = AppDatabase(NativeDatabase.memory());
     supabaseSyncDataSource = MockSupabaseDataSource();
-    syncQueueRepository = SyncQueueRepositoryImpl(
-      dataSource: transactionsDataSource,
-    );
+    syncQueueRepository = SyncQueueRepositoryImpl(syncDao: db.syncDao);
     syncRepositoryImpl = SyncRepositoryImpl(
       syncQueueRepository: syncQueueRepository,
       remoteDataSource: supabaseSyncDataSource,
-      dataSource: transactionsDataSource,
+      transactionsDao: db.transactionsDao,
+      categoriesDao: db.categoriesDao,
+      syncDao: db.syncDao,
     );
   });
 
@@ -36,7 +36,7 @@ void main() {
   });
 
   tearDown(() async {
-    await transactionsDataSource.close();
+    await db.close();
   });
 
   final updatedAt = DateTime.utc(2026, 1, 1, 12).toIso8601String();
@@ -80,12 +80,9 @@ void main() {
     final result = await syncRepositoryImpl.pullRemoteChanges();
 
     expect((result as Success<int>).data, 2);
-    expect(
-      await transactionsDataSource.findCategoryById('cat-remote'),
-      isNotNull,
-    );
+    expect(await db.categoriesDao.findById('cat-remote'), isNotNull);
 
-    final txn = await transactionsDataSource.findTransactionById('txn-1');
+    final txn = await db.transactionsDao.findById('txn-1');
     expect(txn, isNotNull);
     expect(txn!.categoryId, 'cat-remote');
   });
@@ -95,7 +92,7 @@ void main() {
   final sameInstant = DateTime.utc(2026, 1, 1, 12);
 
   Future<Result<int>> pullRemoteVersionAt(DateTime remoteUpdatedAt) async {
-    await transactionsDataSource.upsertTransaction(
+    await db.transactionsDao.upsert(
       TransactionsCompanion.insert(
         id: 'txn-1',
         amountMinor: 500,
@@ -131,7 +128,7 @@ void main() {
   }
 
   Future<Result<int>> pullRemoteCategoryAt(DateTime remoteUpdatedAt) async {
-    await transactionsDataSource.upsertCategory(
+    await db.categoriesDao.upsert(
       CategoriesCompanion.insert(
         id: 'cat-1',
         name: 'Local Name',
@@ -171,7 +168,7 @@ void main() {
     final result = await pullRemoteVersionAt(sameInstant);
 
     expect((result as Success<int>).data, 0);
-    final txn = await transactionsDataSource.findTransactionById('txn-1');
+    final txn = await db.transactionsDao.findById('txn-1');
     expect(txn!.note, 'local edit');
   });
 
@@ -180,7 +177,7 @@ void main() {
     final result = await pullRemoteVersionAt(remoteTime);
 
     expect((result as Success<int>).data, 1);
-    final txn = await transactionsDataSource.findTransactionById('txn-1');
+    final txn = await db.transactionsDao.findById('txn-1');
     expect(txn!.note, 'remote version');
     expect(txn.updatedAt.toUtc(), remoteTime);
   });
@@ -192,7 +189,7 @@ void main() {
     );
 
     expect((result as Success<int>).data, 0);
-    final txn = await transactionsDataSource.findTransactionById('txn-1');
+    final txn = await db.transactionsDao.findById('txn-1');
     expect(txn!.note, 'local edit');
   });
 
@@ -214,7 +211,7 @@ void main() {
     final result = await syncRepositoryImpl.pullRemoteChanges();
 
     expect((result as Success<int>).data, 2);
-    final entries = await transactionsDataSource.getAllSyncQueueEntries();
+    final entries = await db.syncDao.getAllQueued();
     expect(
       entries,
       isEmpty,
@@ -231,7 +228,7 @@ void main() {
         sameInstant.subtract(const Duration(seconds: 5)),
       );
       expect((result as Success<int>).data, 0);
-      final cat = await transactionsDataSource.findCategoryById('cat-1');
+      final cat = await db.categoriesDao.findById('cat-1');
       expect(cat!.name, 'Local Name');
     },
   );
@@ -241,7 +238,7 @@ void main() {
     final remoteTime = sameInstant.add(const Duration(seconds: 5));
     final result = await pullRemoteCategoryAt(remoteTime);
     expect((result as Success<int>).data, 1);
-    final cat = await transactionsDataSource.findCategoryById('cat-1');
+    final cat = await db.categoriesDao.findById('cat-1');
     expect(cat!.name, 'Remote Name');
     expect(cat.updatedAt.toUtc(), remoteTime);
   });
@@ -250,7 +247,7 @@ void main() {
       'applied (tie keeps local)', () async {
     final result = await pullRemoteCategoryAt(sameInstant);
     expect((result as Success<int>).data, 0);
-    final cat = await transactionsDataSource.findCategoryById('cat-1');
+    final cat = await db.categoriesDao.findById('cat-1');
     expect(cat!.name, 'Local Name');
   });
 
@@ -278,14 +275,8 @@ void main() {
       final result = await syncRepositoryImpl.pullRemoteChanges();
 
       expect((result as Success<int>).data, 1);
-      expect(
-        await transactionsDataSource.getSyncMeta('lastPulledAt:category'),
-        isNull,
-      );
-      expect(
-        await transactionsDataSource.getSyncMeta('lastPulledAt:transaction'),
-        isNotNull,
-      );
+      expect(await db.syncDao.getMeta('lastPulledAt:category'), isNull);
+      expect(await db.syncDao.getMeta('lastPulledAt:transaction'), isNotNull);
     },
   );
 
@@ -308,18 +299,12 @@ void main() {
 
       await syncRepositoryImpl.pullRemoteChanges();
 
-      expect(
-        await transactionsDataSource.getSyncMeta('lastPulledAt:category'),
-        isNotNull,
-      );
-      expect(
-        await transactionsDataSource.getSyncMeta('lastPulledAt:transaction'),
-        isNotNull,
-      );
+      expect(await db.syncDao.getMeta('lastPulledAt:category'), isNotNull);
+      expect(await db.syncDao.getMeta('lastPulledAt:transaction'), isNotNull);
 
       // Read it now: the second pull below overwrites it with a newer one,
       // and what the second pull *asks for* is this first value.
-      final savedByFirstPull = await transactionsDataSource.getSyncMeta(
+      final savedByFirstPull = await db.syncDao.getMeta(
         'lastPulledAt:category',
       );
 
@@ -350,7 +335,7 @@ void main() {
     final second = await syncRepositoryImpl.pullRemoteChanges();
     expect((second as Success<int>).data, 0);
 
-    final txn = await transactionsDataSource.findTransactionById('txn-1');
+    final txn = await db.transactionsDao.findById('txn-1');
     expect(txn!.note, 'remote version');
     expect(txn.updatedAt.toUtc(), remoteTime);
   });

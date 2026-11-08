@@ -4,19 +4,25 @@ import 'package:drift/drift.dart';
 import 'package:stockflow/core/result.dart';
 import 'package:stockflow/core/timestamps.dart';
 import 'package:stockflow/core/sync/domain/entities/operation_type.dart';
+import 'package:stockflow/core/database/app_database.dart';
 import 'package:stockflow/core/sync/domain/repositories/sync_queue_repository.dart';
-import 'package:stockflow/features/transactions/data/transactions_data_source.dart';
+import 'package:stockflow/features/transactions/data/daos/transactions_dao.dart';
 import 'package:stockflow/features/transactions/domain/entities/transaction_entity.dart';
 import 'package:stockflow/features/transactions/domain/entities/transaction_type.dart';
 import 'package:stockflow/features/transactions/domain/repositories/transactions_repository.dart';
 import 'package:uuid/uuid.dart';
 
 class TransactionsRepositoryImpl extends TransactionsRepository {
-  final TransactionsDataSource dataSource;
+  // [db] is held for transaction() -- the local write and its sync-queue row
+  // must commit atomically, which spans this DAO and the sync queue. DAO
+  // calls made inside db.transaction(...) join that same transaction.
+  final AppDatabase db;
+  final TransactionsDao dao;
   final SyncQueueRepository syncQueueRepository;
 
   TransactionsRepositoryImpl({
-    required this.dataSource,
+    required this.db,
+    required this.dao,
     required this.syncQueueRepository,
   });
 
@@ -33,20 +39,18 @@ class TransactionsRepositoryImpl extends TransactionsRepository {
 
   @override
   Stream<List<TransactionEntity>> getAllTransactions() {
-    return dataSource.allTransactions.map(
-      (rows) => rows.map(_toEntity).toList(),
-    );
+    return dao.watchAll().map((rows) => rows.map(_toEntity).toList());
   }
 
   @override
   Future<List<TransactionEntity>> getAllTransactionsOnce() async {
-    final rows = await dataSource.getAllTransactionsOnce();
+    final rows = await dao.getAllOnce();
     return rows.map(_toEntity).toList();
   }
 
   @override
   Stream<int> watchBalance() {
-    return dataSource.balance;
+    return dao.watchBalance();
   }
 
   @override
@@ -89,8 +93,8 @@ class TransactionsRepositoryImpl extends TransactionsRepository {
       // row is enqueued unconditionally -- online or offline. See
       // docs/sync-queue.md for why "always enqueue" is the right call and what
       // is deliberately not built yet.
-      await dataSource.transaction(() async {
-        await dataSource.addTransaction(entry);
+      await db.transaction(() async {
+        await dao.insertOne(entry);
         final queued = await syncQueueRepository.enqueue(
           entityType: 'transaction',
           entityId: id,
@@ -114,8 +118,8 @@ class TransactionsRepositoryImpl extends TransactionsRepository {
   @override
   Future<Result<int>> deleteTransaction(String id) async {
     try {
-      final result = await dataSource.transaction(() async {
-        final count = await dataSource.deleteTransaction(id);
+      final result = await db.transaction(() async {
+        final count = await dao.deleteById(id);
         final queued = await syncQueueRepository.enqueue(
           entityType: 'transaction',
           entityId: id,
